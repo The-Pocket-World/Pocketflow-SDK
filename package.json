@@ -1,0 +1,32 @@
+{
+  "name": "pocketflow-sdk",
+  "version": "1.0.0",
+  "description": "SDK for interacting with PocketFlow API",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "ts-node test.ts",
+    "prepublish": "npm run build"
+  },
+  "keywords": [
+    "pocketflow",
+    "sdk",
+    "api",
+    "workflow"
+  ],
+  "author": "",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "socket.io-client": "^4.7.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.1",
+    "@types/node": "^18.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
+}
