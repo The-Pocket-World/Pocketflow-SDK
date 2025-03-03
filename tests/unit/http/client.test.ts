@@ -1,4 +1,9 @@
-import { listWorkflows, getWorkflowDetail, ApiAuth } from "../../../src";
+import {
+  listWorkflows,
+  getWorkflowDetail,
+  ApiAuth,
+  NotFoundError,
+} from "../../../src";
 import {
   setupFetchMock,
   resetFetchMock,
@@ -8,6 +13,15 @@ import {
   mockWorkflowDetailResponse,
   mockErrorResponse,
 } from "../../mocks/fetch.mock";
+
+// Mock the env module to control the SERVER_URL
+jest.mock("../../../src/env", () => ({
+  __esModule: true,
+  default: {
+    API_KEY: "test_api_key",
+    SERVER_URL: "http://localhost:8080",
+  },
+}));
 
 describe("HTTP Client API", () => {
   // Mock auth for all tests
@@ -39,7 +53,7 @@ describe("HTTP Client API", () => {
       // Verify the fetch call
       expect(global.fetch).toHaveBeenCalledTimes(1);
       expect(global.fetch).toHaveBeenCalledWith(
-        "https://api.pocketflow.app/v1/workflows",
+        "http://localhost:8080/api/workflows",
         expect.objectContaining({
           method: "GET",
           headers: {
@@ -108,7 +122,7 @@ describe("HTTP Client API", () => {
 
       // Call the function and expect it to throw
       await expect(listWorkflows(emptyAuth)).rejects.toThrow(
-        "Authentication required: Please provide either a JWT token or API key"
+        "Authentication required: Please provide an API key"
       );
 
       // Verify fetch was not called
@@ -116,12 +130,12 @@ describe("HTTP Client API", () => {
     });
 
     it("should handle API errors correctly", async () => {
-      // Set up mock error response
+      // Set up mock error response with the specific error message
       mockErrorResponseFn(404, mockErrorResponse);
 
       // Call the function and expect it to throw
       await expect(listWorkflows(auth)).rejects.toThrow(
-        "No workflow with ID wf_invalid was found"
+        "Resource not found: /workflows"
       );
 
       // Verify fetch was called
@@ -145,7 +159,7 @@ describe("HTTP Client API", () => {
       // Verify the fetch call
       expect(global.fetch).toHaveBeenCalledTimes(1);
       expect(global.fetch).toHaveBeenCalledWith(
-        "https://api.pocketflow.app/v1/workflows/wf_123456789",
+        "http://localhost:8080/api/workflows/wf_123456789",
         expect.objectContaining({
           method: "GET",
           headers: {
@@ -162,7 +176,7 @@ describe("HTTP Client API", () => {
 
       // Call the function and expect it to throw
       await expect(getWorkflowDetail(auth, "wf_invalid")).rejects.toThrow(
-        "No workflow with ID wf_invalid was found"
+        "Resource not found: /workflows/wf_invalid"
       );
 
       // Verify fetch was called

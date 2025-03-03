@@ -3,7 +3,7 @@ import { connectSocket } from "./socket/connect";
 import { runWorkflow } from "./socket/workflow";
 
 // Export workflow HTTP API functions
-import { listWorkflows, getWorkflowDetail } from "./http/client";
+import { listWorkflows, getWorkflowDetail, NotFoundError } from "./http/client";
 
 // Export CLI functionality
 import * as cli from "./cli";
@@ -48,6 +48,7 @@ export {
   // HTTP API functions
   listWorkflows,
   getWorkflowDetail,
+  NotFoundError,
 
   // CLI functionality
   cli,

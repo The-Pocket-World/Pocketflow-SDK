@@ -1,126 +1,175 @@
-#!/usr/bin/env node
-import { runTwitterAnalysis } from "./index";
+/**
+ * Twitter CLI Example
+ *
+ * This file provides a command-line interface for the Twitter example.
+ * It demonstrates how to use the statically typed Twitter implementation with user input.
+ */
+
+import { runTwitterAnalysis, TwitterAnalysisOptions } from "./index";
 import * as readline from "readline";
 import * as dotenv from "dotenv";
 
 // Load environment variables
 dotenv.config();
 
-// Create readline interface for user input
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-});
-
-// Parse command line arguments
-const args = process.argv.slice(2);
-const argMap: Record<string, string> = {};
-
-// Parse arguments in the format --key=value
-args.forEach((arg) => {
-  if (arg.startsWith("--")) {
-    const [key, value] = arg.substring(2).split("=");
-    if (key && value) {
-      argMap[key] = value;
-    }
-  }
-});
-
-// Check if help flag is present
-if (args.includes("--help") || args.includes("-h")) {
-  console.log(`
-Twitter Competitor Analysis Example
-
-Usage:
-  npx ts-node examples/twitter/cli.ts [options]
-
-Options:
-  --token=<auth_token>           Your authentication token (or set POCKETFLOW_API_KEY env var)
-  --prompt=<search_prompt>       The search prompt (e.g., "Show me competitors")
-  --project=<description>        Your project description
-  --limit=<number>               Maximum number of tweets to return (default: 5)
-  --endpoint=<url>               API endpoint (or set POCKETFLOW_SERVER_URL env var)
-  --help, -h                     Show this help message
-
-Example:
-  npx ts-node examples/twitter/cli.ts --token=pfl_abc123 --prompt="AI assistants" --project="A coding assistant" --limit=10
-  `);
-  process.exit(0);
+/**
+ * CLI argument definitions
+ */
+interface CliArgs {
+  token?: string;
+  prompt?: string;
+  project?: string;
+  limit?: string;
+  help?: boolean;
+  [key: string]: string | boolean | undefined;
 }
 
-// Function to prompt for input if not provided
-function prompt(question: string, defaultValue?: string): Promise<string> {
-  return new Promise((resolve) => {
+/**
+ * Parse command line arguments
+ * @returns Parsed command line arguments
+ */
+function parseArgs(): CliArgs {
+  const args = process.argv.slice(2);
+  const argMap: CliArgs = {};
+
+  // Check for help flag
+  if (args.includes("--help") || args.includes("-h")) {
+    argMap.help = true;
+    return argMap;
+  }
+
+  // Parse arguments in the format --key=value
+  args.forEach((arg) => {
+    if (arg.startsWith("--")) {
+      const [key, value] = arg.substring(2).split("=");
+      if (key && value) {
+        argMap[key as keyof CliArgs] = value;
+      }
+    }
+  });
+
+  return argMap;
+}
+
+/**
+ * Display help information
+ */
+function showHelp(): void {
+  console.log(`
+Twitter Analysis CLI - Using Statically Typed Implementation
+
+Usage:
+  npm run examples:twitter:cli -- [options]
+
+Options:
+  --token=<token>     Your PocketFlow API token
+  --prompt=<prompt>   Search prompt (e.g., "AI assistants")
+  --project=<desc>    Project description
+  --limit=<number>    Maximum number of tweets to return
+
+Example:
+  npm run examples:twitter:cli -- --token=your_token --prompt="AI assistants" --project="A coding assistant" --limit=10
+  `);
+}
+
+/**
+ * Prompt the user for input
+ * @param question The question to ask
+ * @param defaultValue Default value if user doesn't provide input
+ * @returns A promise that resolves with the user's input
+ */
+async function promptUser(
+  question: string,
+  defaultValue?: string
+): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise<string>((resolve) => {
     const defaultText = defaultValue ? ` (default: "${defaultValue}")` : "";
     rl.question(`${question}${defaultText}: `, (answer) => {
-      resolve(answer || defaultValue || "");
+      rl.close();
+      resolve(answer.trim() || defaultValue || "");
     });
   });
 }
 
-// Main function to run the CLI
-async function main() {
+/**
+ * Run the CLI interface
+ */
+async function runCli() {
+  console.log(
+    "🔍 Twitter Analysis CLI - Using Statically Typed Implementation"
+  );
+
+  // Parse command line arguments
+  const args = parseArgs();
+
+  // Show help if requested
+  if (args.help) {
+    showHelp();
+    return;
+  }
+
   try {
-    // Get auth token from args, env var, or prompt
-    let authToken = argMap.token || process.env.POCKETFLOW_API_KEY;
-    if (!authToken) {
-      authToken = await prompt("Enter your authentication token");
-      if (!authToken) {
-        console.error("❌ Authentication token is required");
-        process.exit(1);
+    // Get token from arguments or environment variable
+    let token = args.token || process.env.POCKETFLOW_API_KEY;
+    if (!token) {
+      token = await promptUser("Enter your PocketFlow API token");
+      if (!token) {
+        throw new Error("API token is required");
       }
     }
 
-    // Get endpoint from args, env var, or prompt
-    const endpoint =
-      argMap.endpoint ||
-      process.env.POCKETFLOW_SERVER_URL ||
-      (await prompt("Enter API endpoint", "http://localhost:8080"));
+    // Get prompt from arguments or prompt the user
+    const prompt =
+      args.prompt ||
+      (await promptUser("Enter search prompt", "AI assistants for developers"));
 
-    // Get other parameters with defaults
-    const promptText =
-      argMap.prompt ||
-      (await prompt("Enter search prompt", "Show me competitors"));
-    const projectDesc =
-      argMap.project ||
-      (await prompt("Enter project description", "A SaaS AI Agent builder."));
-    const limitStr = argMap.limit || (await prompt("Enter result limit", "5"));
+    // Get project description from arguments or prompt the user
+    const project =
+      args.project ||
+      (await promptUser(
+        "Enter project description",
+        "A coding assistant that helps developers write better code"
+      ));
 
-    // Parse limit as number
-    const limit = parseInt(limitStr, 10);
-    if (isNaN(limit) || limit <= 0) {
-      console.error("❌ Limit must be a positive number");
-      process.exit(1);
-    }
+    // Get limit from arguments or prompt the user
+    const limitStr =
+      args.limit || (await promptUser("Enter maximum number of tweets", "10"));
+    const limit = parseInt(limitStr, 10) || 10;
 
-    // Run the analysis
-    console.log("\n🚀 Starting Twitter competitor analysis...\n");
-
-    const cleanup = await runTwitterAnalysis({
-      authToken,
-      endpoint,
+    // Prepare options for the Twitter analysis
+    const options: TwitterAnalysisOptions = {
+      authToken: token,
       input: {
-        prompt: promptText,
-        project_description: projectDesc,
+        prompt,
+        project_description: project,
         limit,
       },
-    });
+    };
 
-    // Handle process termination
-    process.on("SIGINT", () => {
-      console.log("\n\n🛑 Terminating...");
-      cleanup();
-      rl.close();
-      process.exit(0);
-    });
+    // Run the Twitter analysis with the provided parameters
+    console.log("\n⏳ Running Twitter analysis...");
+    const result = await runTwitterAnalysis(options);
+
+    console.log("\n✅ Analysis completed successfully!");
+    console.log(`Found ${result.tweets.length} tweets matching your criteria.`);
   } catch (error) {
-    console.error("❌ An error occurred:", error);
+    console.error(
+      "\n❌ Error:",
+      error instanceof Error ? error.message : "Unknown error"
+    );
     process.exit(1);
   }
 }
 
-// Run the main function
-main().finally(() => {
-  // Close readline interface when done
-  rl.close();
-});
+// Run the CLI
+if (require.main === module) {
+  runCli().catch((error) => {
+    console.error("Unhandled error:", error);
+    process.exit(1);
+  });
+}

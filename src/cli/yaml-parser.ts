@@ -1,5 +1,5 @@
 import * as yaml from "js-yaml";
-import { YamlFlow } from "./types";
+import { YamlFlow, YamlFlowParam, YamlStep, YamlStepSuccessor } from "./types";
 
 /**
  * Parse YAML content into a YamlFlow object
@@ -8,34 +8,93 @@ import { YamlFlow } from "./types";
  */
 export function parseYamlFlow(yamlContent: string): YamlFlow {
   try {
-    const flow = yaml.load(yamlContent) as YamlFlow;
+    console.log("Parsing YAML content:", yamlContent);
+    const parsed = yaml.load(yamlContent) as any;
+    console.log("Parsed YAML:", JSON.stringify(parsed, null, 2));
 
     // Validate the YAML structure
-    if (!flow || typeof flow !== "object") {
+    if (!parsed || typeof parsed !== "object") {
       throw new Error("Invalid YAML: Expected an object");
     }
 
-    if (flow.type !== "flow") {
+    if (parsed.type !== "flow") {
       throw new Error('Invalid YAML: Type must be "flow"');
     }
 
-    if (!flow.name || typeof flow.name !== "string") {
+    if (!parsed.name || typeof parsed.name !== "string") {
       throw new Error("Invalid YAML: Missing or invalid name");
     }
 
-    if (!Array.isArray(flow.input)) {
+    if (!Array.isArray(parsed.input)) {
       throw new Error("Invalid YAML: Input must be an array");
     }
 
-    if (!Array.isArray(flow.outputs)) {
+    if (!Array.isArray(parsed.outputs)) {
       throw new Error("Invalid YAML: Outputs must be an array");
     }
 
-    if (!Array.isArray(flow.steps)) {
+    if (!Array.isArray(parsed.steps)) {
+      console.log("Steps value:", parsed.steps);
       throw new Error("Invalid YAML: Steps must be an array");
     }
 
-    return flow;
+    // Transform the input format
+    const input = parsed.input.map((item: any) => {
+      const [key, value] = Object.entries(item)[0];
+      return { [key]: value } as YamlFlowParam;
+    });
+
+    // Transform the outputs format
+    const outputs = parsed.outputs.map((item: any) => {
+      const [key, value] = Object.entries(item)[0];
+      return { [key]: value } as YamlFlowParam;
+    });
+
+    // Transform the steps format
+    const steps = parsed.steps.map((step: any) => {
+      // Transform expects format
+      const expects = step.expects.map((item: any) => {
+        const [key, value] = Object.entries(item)[0];
+        return { [key]: value } as YamlFlowParam;
+      });
+
+      // Transform outputs format
+      const outputs = step.outputs.map((item: any) => {
+        const [key, value] = Object.entries(item)[0];
+        return { [key]: value } as YamlFlowParam;
+      });
+
+      // Transform successor format
+      const successor = step.successor.map((item: any) => {
+        const [key, value] = Object.entries(item)[0];
+        return { [key]: value } as YamlStepSuccessor;
+      });
+
+      return {
+        name: step.name,
+        type: step.type,
+        path: step.path,
+        expects,
+        outputs,
+        successor,
+        batch_size: step.batch_size,
+        max_retries: step.max_retries,
+        retry_interval_ms: step.retry_interval_ms,
+      } as YamlStep;
+    });
+
+    const result = {
+      name: parsed.name,
+      type: parsed.type,
+      input,
+      outputs,
+      steps,
+      config: parsed.config,
+      shared_files: parsed.shared_files,
+    } as YamlFlow;
+
+    console.log("Transformed result:", JSON.stringify(result, null, 2));
+    return result;
   } catch (error) {
     if (error instanceof Error) {
       throw new Error(`Failed to parse YAML flow: ${error.message}`);

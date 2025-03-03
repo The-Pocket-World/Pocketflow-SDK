@@ -204,59 +204,135 @@ export interface WorkflowRunnerOptions {
 }
 
 /**
- * Runs a workflow with the specified ID and input.
- * @param socket The socket instance to use for running the workflow.
+ * Run a workflow with the specified ID and input.
+ * @param socket The socket instance to use for communication with the server.
  * @param workflowId The ID of the workflow to run.
- * @param token The authentication token to use.
- * @param input The input data for the workflow.
+ * @param authToken The authentication token to use for the workflow.
+ * @param input The input parameters for the workflow.
  * @param options Options for customizing the workflow execution.
- * @returns A cleanup function to remove all event listeners.
  */
 export const runWorkflow = (
   socket: Socket,
   workflowId: string,
-  token: string,
+  authToken: string,
   input: any,
   options: WorkflowRunnerOptions = {}
-) => {
-  const { handlers = {}, prettyLogs = false, verbose = true } = options;
+): void => {
+  console.log("=== DEBUG: runWorkflow called ===");
+  console.log(`DEBUG: Workflow ID: ${workflowId}`);
+  console.log(
+    `DEBUG: Auth token provided: ${
+      authToken ? "Yes (length: " + authToken.length + ")" : "No"
+    }`
+  );
+  console.log(`DEBUG: Input:`, JSON.stringify(input, null, 2));
+  console.log(
+    `DEBUG: Options:`,
+    JSON.stringify(
+      {
+        ...options,
+        handlers: options.handlers ? Object.keys(options.handlers) : undefined,
+      },
+      null,
+      2
+    )
+  );
 
-  // Determine which base handlers to use
-  const baseHandlers = prettyLogs ? prettyLogHandlers : defaultHandlers;
-
-  // Merge default handlers with custom handlers
-  const mergedHandlers: EventHandlers = { ...baseHandlers, ...handlers };
-
-  if (verbose) {
-    console.log(`Running workflow: ${workflowId}`);
-    console.log(`Input:`, JSON.stringify(input, null, 2));
+  // Check if socket is connected
+  if (!socket) {
+    console.error("DEBUG: Socket is null or undefined");
+    throw new Error("Socket is null or undefined");
   }
 
-  // Register all event handlers
-  const registeredEvents: string[] = [];
+  if (typeof socket.connected === "boolean") {
+    console.log(`DEBUG: Socket connected status: ${socket.connected}`);
 
-  Object.entries(mergedHandlers).forEach(([event, handler]) => {
-    if (handler) {
-      socket.on(event, handler as any);
-      registeredEvents.push(event);
+    if (!socket.connected) {
+      console.error("DEBUG: Socket is not connected");
+
+      // Try to reconnect if possible
+      if (typeof socket.connect === "function") {
+        console.log("DEBUG: Attempting to reconnect socket...");
+        try {
+          socket.connect();
+
+          // Wait a bit for the connection to establish
+          setTimeout(() => {
+            if (socket.connected) {
+              console.log("DEBUG: Socket reconnected successfully");
+            } else {
+              console.error("DEBUG: Socket failed to reconnect");
+              throw new Error("Socket failed to reconnect");
+            }
+          }, 1000);
+        } catch (reconnectError) {
+          console.error("DEBUG: Error reconnecting socket:", reconnectError);
+          throw new Error(
+            "Failed to reconnect socket: " +
+              (reconnectError instanceof Error
+                ? reconnectError.message
+                : "Unknown error")
+          );
+        }
+      } else {
+        throw new Error("Socket is not connected and cannot be reconnected");
+      }
     }
-  });
+  } else {
+    console.warn(
+      "DEBUG: Socket.connected is not a boolean, cannot determine connection status"
+    );
+  }
 
-  // Emit the run_workflow event
-  socket.emit("run_workflow", {
+  // Extract options
+  const { handlers = {}, prettyLogs = false, verbose = false } = options;
+
+  // Register event handlers
+  if (handlers) {
+    console.log(
+      `DEBUG: Registering ${Object.keys(handlers).length} event handlers`
+    );
+    Object.entries(handlers).forEach(([event, handler]) => {
+      if (handler !== undefined && handler !== null) {
+        console.log(`DEBUG: Registering handler for event: ${event}`);
+        // Remove any existing handlers for this event to avoid duplicates
+        socket.off(event);
+        // Add the new handler
+        socket.on(event, handler as any);
+      }
+    });
+  }
+
+  // Prepare the payload - use a simple structure with just flowId and input
+  const payload = {
     flowId: workflowId,
-    token: token,
     input: input,
-  });
+  };
 
-  // Return a cleanup function to remove all event listeners
-  return () => {
-    registeredEvents.forEach((event) => {
-      socket.off(event);
+  console.log(`DEBUG: Preparing to emit workflow event with payload`);
+  console.log(`DEBUG: Payload flowId: ${payload.flowId}`);
+  console.log(`DEBUG: Full payload:`, JSON.stringify(payload, null, 2));
+
+  // Use run_flow as the event name
+  const eventName = "run_flow";
+
+  try {
+    // Emit the event
+    console.log(`DEBUG: Emitting ${eventName} event`);
+    socket.emit(eventName, payload);
+    console.log(`DEBUG: ${eventName} event emitted successfully`);
+
+    // Add a listener for acknowledgment
+    socket.once("flow_received", (data) => {
+      console.log(`DEBUG: Server acknowledged flow receipt:`, data);
     });
 
-    if (verbose) {
-      console.log(`Cleaned up event listeners for workflow: ${workflowId}`);
-    }
-  };
+    // Add a listener for errors
+    socket.once("flow_error", (error) => {
+      console.error(`DEBUG: Server reported flow error:`, error);
+    });
+  } catch (error) {
+    console.error(`DEBUG: Error emitting workflow event:`, error);
+    throw error;
+  }
 };

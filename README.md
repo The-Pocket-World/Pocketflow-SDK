@@ -17,6 +17,12 @@ A TypeScript SDK for interacting with the PocketFlow API, enabling seamless inte
     - [Connecting to the Socket Server](#connecting-to-the-socket-server)
     - [Running Workflows](#running-workflows)
     - [Handling Events](#handling-events)
+  - [🛠️ CLI Usage](#️-cli-usage)
+    - [Initialize Configuration](#initialize-configuration)
+    - [Generate Workflow Types](#generate-workflow-types)
+    - [Authentication Options](#authentication-options)
+    - [Using Generated Functions](#using-generated-functions)
+    - [CLI Command Options](#cli-command-options)
   - [📚 API Reference](#-api-reference)
     - [`connectSocket`](#connectsocket)
     - [`runWorkflow`](#runworkflow)
@@ -195,6 +201,104 @@ const cleanup = runWorkflow(
 );
 ```
 
+## 🛠️ CLI Usage
+
+The PocketFlow CLI allows you to generate type-safe TypeScript wrappers for your workflows.
+
+### Initialize Configuration
+
+Create a default configuration file in your project:
+
+```bash
+npx pocketflow init
+```
+
+This will create a `.pocketflowrc.json` file in your project root with the following structure:
+
+```json
+{
+  "auth": {
+    "apiKey": "pfl_your_api_key"
+  },
+  "outDir": "src/flows",
+  "verbose": false
+}
+```
+
+### Generate Workflow Types
+
+Generate TypeScript types for your workflows:
+
+```bash
+npx pocketflow generate
+```
+
+This will:
+
+1. Fetch all workflows from your account
+2. Generate TypeScript interfaces for input/output types
+3. Create type-safe wrapper functions
+4. Save them in the specified output directory (default: `src/flows`)
+
+### Authentication Options
+
+You have several options for providing your API key:
+
+1. **Command line argument**:
+
+   ```bash
+   npx pocketflow generate -k pfl_your_api_key
+   ```
+
+2. **Configuration file** (`.pocketflowrc.json`):
+
+   ```json
+   {
+     "auth": {
+       "apiKey": "pfl_your_api_key"
+     }
+   }
+   ```
+
+3. **Environment variable**:
+
+   ```bash
+   export POCKETFLOW_API_KEY=pfl_your_api_key
+   npx pocketflow generate
+   ```
+
+4. **Environment file** (`.env`):
+   ```
+   POCKETFLOW_API_KEY=pfl_your_api_key
+   POCKETFLOW_SERVER_URL=https://api.pocketflow.app
+   ```
+
+### Using Generated Functions
+
+In your application code:
+
+```typescript
+import { runTwitterMonitoringWorkflow } from "./flows";
+
+async function monitorTwitter() {
+  const result = await runTwitterMonitoringWorkflow({
+    query: "artificial intelligence",
+    maxResults: 50,
+  });
+
+  console.log(`Found ${result.results.length} tweets`);
+}
+```
+
+### CLI Command Options
+
+Available options:
+
+- `-k, --api-key <key>`: PocketFlow API key
+- `-t, --token <token>`: JWT token (alternative to API key)
+- `-o, --out-dir <dir>`: Output directory (default: `src/flows`)
+- `-v, --verbose`: Enable verbose output
+
 ## 📚 API Reference
 
 ### `connectSocket`
@@ -279,13 +383,21 @@ The SDK includes example implementations that demonstrate how to use it with rea
 
 ### Twitter Analysis Example
 
-The SDK includes a Twitter competitor analysis example that demonstrates how to use the SDK to analyze Twitter data.
+The SDK includes a Twitter analysis example that demonstrates how to use the generated statically typed implementation.
 
 #### Running the Example
 
 ```bash
 npm run examples:twitter
 ```
+
+This example uses the generated TypeScript interfaces and functions from the `src/flows` directory, providing full type safety and autocompletion in your IDE. The statically typed implementation offers several benefits:
+
+1. **Type Safety**: Full TypeScript type checking for inputs and outputs
+2. **Autocomplete**: IDE suggestions for available properties and methods
+3. **Documentation**: Inline documentation through JSDoc comments
+4. **Error Prevention**: Compile-time checks to prevent runtime errors
+5. **Refactoring Support**: Better tooling for code refactoring
 
 #### Interactive CLI
 
@@ -316,7 +428,6 @@ runTwitterAnalysis();
 // Or provide values directly
 runTwitterAnalysis({
   authToken: "your_api_key_here",
-  endpoint: "https://api.pocketflow.ai",
   input: {
     prompt: "AI assistants for developers",
     project_description: "A coding assistant",

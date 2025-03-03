@@ -10,7 +10,7 @@ import env from "../env";
  * Uses POCKETFLOW_SERVER_URL from environment if available
  */
 const SERVER_URL = env.SERVER_URL || "https://api.pocketflow.app";
-// Remove trailing slash if present but don't add /v1
+// Remove trailing slash if present
 const BASE_URL = SERVER_URL.endsWith("/")
   ? SERVER_URL.slice(0, -1)
   : SERVER_URL;
@@ -173,9 +173,26 @@ export interface WorkflowDetail extends WorkflowSummary {
   yaml_path: string;
 
   /**
+   * YAML content of the workflow
+   */
+  yaml?: string;
+
+  /**
    * List of nodes in the workflow
    */
   nodes: WorkflowNode[];
+
+  /**
+   * Alternative response structure with nested workflow object
+   */
+  workflow?: {
+    id: string;
+    name: string;
+    yamlPath: string;
+    prompt: string;
+    yamlContent: string;
+    [key: string]: any;
+  };
 }
 
 /**
@@ -187,6 +204,16 @@ export interface ApiErrorResponse {
     message: string;
     details?: string;
   };
+}
+
+/**
+ * Custom error class for 404 Not Found responses
+ */
+export class NotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NotFoundError";
+  }
 }
 
 /**
@@ -246,15 +273,19 @@ async function apiRequest<T>(
     // Make sure we have a valid URL by ensuring endpoint starts with /
     const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
 
-    // Local server uses /api prefix while production API uses /v1
-    const apiPrefix = BASE_URL.includes("api.pocketflow.app") ? "/v1" : "/api";
+    const apiPrefix = "/api";
 
     // Construct the full URL with the appropriate prefix
     const url = buildUrlWithParams(`${apiPrefix}${path}`, params);
 
+    // Always log the request URL for debugging
+    console.log(`API Request: ${method} ${url}`);
+
     if (auth.verbose) {
-      console.log(`API Request: ${method} ${url}`);
-      console.log("Headers:", buildAuthHeaders(auth));
+      console.log("Headers:", JSON.stringify(buildAuthHeaders(auth), null, 2));
+      if (body) {
+        console.log("Request Body:", JSON.stringify(body, null, 2));
+      }
     }
 
     const response = await fetch(url, {
@@ -263,20 +294,45 @@ async function apiRequest<T>(
       body: body ? JSON.stringify(body) : undefined,
     });
 
+    // Log response status and headers for debugging
+    console.log(`Response Status: ${response.status} ${response.statusText}`);
+
+    if (auth.verbose) {
+      const responseHeaders: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        responseHeaders[key] = value;
+      });
+      console.log(
+        "Response Headers:",
+        JSON.stringify(responseHeaders, null, 2)
+      );
+    }
+
     // First get the response as text
     const responseText = await response.text();
+
+    // Special handling for 404 responses
+    if (response.status === 404) {
+      if (auth.verbose) {
+        console.log(`Resource not found: ${url}`);
+      } else {
+        // Always log 404 errors even in non-verbose mode
+        console.error(`Resource not found: ${url}`);
+        console.error(`Response body: ${responseText}`);
+      }
+      throw new NotFoundError(`Resource not found: ${endpoint}`);
+    }
 
     // Try to parse as JSON
     let data;
     try {
       data = JSON.parse(responseText);
     } catch (parseError: any) {
-      if (auth.verbose) {
-        console.error("Failed to parse server response as JSON:");
-        console.error("----- Response Body Start -----");
-        console.error(responseText);
-        console.error("----- Response Body End -----");
-      }
+      console.error("Failed to parse server response as JSON:");
+      console.error("----- Response Body Start -----");
+      console.error(responseText);
+      console.error("----- Response Body End -----");
+
       throw new Error(
         `Invalid response format: ${parseError.message}. Check server configuration and API endpoints.`
       );
@@ -284,16 +340,52 @@ async function apiRequest<T>(
 
     if (!response.ok) {
       // Handle API error responses
-      const errorResponse = data as ApiErrorResponse;
-      throw new Error(
-        `API error: ${errorResponse.error.message}${
-          errorResponse.error.details ? ` - ${errorResponse.error.details}` : ""
-        }`
-      );
+      console.error("API Error Response:", JSON.stringify(data, null, 2));
+
+      // Special handling for workflow fetch errors (both 404 and 500 with specific message)
+      if (data && data.error === "Failed to fetch workflow") {
+        const errorMsg = `Failed to fetch workflow at ${url}, treating as not found.`;
+        console.error(errorMsg);
+        if (auth.verbose) {
+          console.error(`Full response: ${responseText}`);
+        }
+        throw new NotFoundError(
+          `Failed to fetch workflow. The workflow may not exist or the server encountered an internal error.`
+        );
+      }
+
+      if (data && data.error) {
+        // Handle standard error response format
+        const errorResponse = data as ApiErrorResponse;
+        throw new Error(
+          `API error: ${errorResponse.error.message || "Unknown error"}${
+            errorResponse.error.details
+              ? ` - ${errorResponse.error.details}`
+              : ""
+          }`
+        );
+      } else {
+        // If the error structure is not as expected, log the entire response
+        throw new Error(
+          `API error: ${response.status} ${
+            response.statusText
+          } - ${JSON.stringify(data)}`
+        );
+      }
     }
 
     return data as T;
   } catch (error) {
+    // Rethrow NotFoundError so it can be handled specially
+    if (error instanceof NotFoundError) {
+      throw error;
+    }
+
+    console.error(
+      `API Request Failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
     if (error instanceof Error) {
       throw error;
     } else {
@@ -319,5 +411,36 @@ export async function getWorkflowDetail(
   auth: ApiAuth,
   workflowId: string
 ): Promise<WorkflowDetail> {
-  return apiRequest<WorkflowDetail>(`/workflows/${workflowId}`, "GET", auth);
+  console.log(`Fetching details for workflow ID: ${workflowId}`);
+  try {
+    const result = await apiRequest<WorkflowDetail>(
+      `/workflows/${workflowId}`,
+      "GET",
+      auth
+    );
+
+    // Log the full response for debugging
+    console.log(
+      `Workflow detail response for ${workflowId}:`,
+      JSON.stringify(result, null, 2)
+    );
+
+    // Log whether YAML content was found
+    if (!result.yaml) {
+      console.warn(`Warning: No YAML content found for workflow ${workflowId}`);
+    } else {
+      console.log(
+        `Successfully retrieved YAML content for workflow ${workflowId}`
+      );
+    }
+
+    return result;
+  } catch (error) {
+    console.error(
+      `Failed to get details for workflow ${workflowId}: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+    throw error;
+  }
 }

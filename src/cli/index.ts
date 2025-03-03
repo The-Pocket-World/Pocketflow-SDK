@@ -79,9 +79,7 @@ program
       // Test 2: API endpoint (workflows)
       try {
         console.log("\nTest 2: API endpoints");
-        const apiPrefix = serverUrl.includes("api.pocketflow.app")
-          ? "/v1"
-          : "/api";
+        const apiPrefix = "/api";
         const apiUrl = `${
           serverUrl.endsWith("/") ? serverUrl.slice(0, -1) : serverUrl
         }${apiPrefix}/workflows`;

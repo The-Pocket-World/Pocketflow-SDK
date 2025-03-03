@@ -83,7 +83,10 @@ export const resetFetchMock = () => {
 export const mockSuccessResponse = (data: any) => {
   (global.fetch as jest.Mock).mockResolvedValueOnce({
     ok: true,
+    status: 200,
     json: async () => data,
+    text: async () => JSON.stringify(data),
+    headers: new Map([["content-type", "application/json"]]),
   });
 };
 
@@ -93,5 +96,7 @@ export const mockErrorResponseFn = (status: number, errorData: any) => {
     ok: false,
     status,
     json: async () => errorData,
+    text: async () => JSON.stringify(errorData),
+    headers: new Map([["content-type", "application/json"]]),
   });
 };

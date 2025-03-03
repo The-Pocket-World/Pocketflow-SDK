@@ -2,62 +2,90 @@
  * Twitter Example Usage
  *
  * This file demonstrates how to use the Twitter example programmatically.
+ * It shows how to call the runTwitterAnalysis function with custom parameters.
  */
 
-import { runTwitterAnalysis } from "./index";
+import { runTwitterAnalysis, TwitterAnalysisOptions } from "./index";
 import * as dotenv from "dotenv";
 
 // Load environment variables
 dotenv.config();
 
-async function runExample() {
-  console.log("🚀 Running Twitter competitor analysis example...");
-
-  // Get API key from environment variable or use default
-  const authToken = process.env.POCKETFLOW_API_KEY || "YOUR_AUTH_TOKEN";
-
-  // Get server URL from environment variable or use default
-  const endpoint = process.env.POCKETFLOW_SERVER_URL || "http://localhost:8080";
-
-  // Custom search parameters
-  const input = {
+/**
+ * Example configuration for the Twitter analysis
+ */
+const EXAMPLE_CONFIG: TwitterAnalysisOptions = {
+  input: {
     prompt: "AI assistants for developers",
     project_description:
       "A coding assistant that helps developers write better code",
     limit: 10,
-  };
+  },
+  // Use saveResults: true to generate an HTML report (default)
+};
+
+/**
+ * Run the example with custom configuration
+ */
+async function runExample() {
+  console.log(
+    "🚀 Running Twitter analysis example with statically typed implementation..."
+  );
 
   try {
-    // Run the Twitter analysis
-    const cleanup = await runTwitterAnalysis({
+    // Get API key from environment variable
+    const authToken = process.env.POCKETFLOW_API_KEY;
+    if (!authToken) {
+      throw new Error("POCKETFLOW_API_KEY environment variable is not set");
+    }
+
+    // Merge the example configuration with the auth token
+    const options: TwitterAnalysisOptions = {
+      ...EXAMPLE_CONFIG,
       authToken,
-      endpoint,
-      input,
-    });
+    };
 
-    // Set a timeout to demonstrate cleanup
-    setTimeout(() => {
-      console.log("\n✅ Example completed. Cleaning up...");
-      cleanup();
-      process.exit(0);
-    }, 60000); // Wait for 1 minute to allow the workflow to complete
+    // Log the configuration
+    console.log("\n📋 Configuration:");
+    console.log(`  Prompt: "${options.input?.prompt}"`);
+    console.log(`  Project: "${options.input?.project_description}"`);
+    console.log(`  Limit: ${options.input?.limit} tweets`);
 
-    console.log("\n⏳ Waiting for results (will exit in 1 minute)...");
-    console.log("Press Ctrl+C to exit early");
+    // Run the Twitter analysis with the provided configuration
+    console.log("\n⏳ Running analysis...");
+    const result = await runTwitterAnalysis(options);
 
-    // Handle early termination
-    process.on("SIGINT", () => {
-      console.log("\n🛑 Terminating early...");
-      cleanup();
-      process.exit(0);
-    });
+    // Log the results
+    console.log("\n📊 Results:");
+    console.log(`  Found ${result.tweets.length} tweets`);
+
+    // Log a sample tweet if available
+    if (result.tweets.length > 0) {
+      const sampleTweet = result.tweets[0];
+      console.log("\n📝 Sample tweet:");
+      console.log(`  Content: "${sampleTweet.content?.substring(0, 100)}..."`);
+      console.log(`  Author: ${sampleTweet.metadata?.author || "Unknown"}`);
+      console.log(`  Score: ${sampleTweet.score}`);
+    }
+
+    console.log("\n✅ Example completed successfully!");
+    return result;
   } catch (error) {
-    console.error("❌ Error running example:", error);
-    process.exit(1);
+    console.error(
+      "\n❌ Error running example:",
+      error instanceof Error ? error.message : "Unknown error"
+    );
+    throw error;
   }
 }
 
 // Run the example if this file is executed directly
 if (require.main === module) {
-  runExample();
+  runExample().catch((error) => {
+    console.error("Unhandled error:", error);
+    process.exit(1);
+  });
 }
+
+// Export the example function for programmatic usage
+export { runExample };
