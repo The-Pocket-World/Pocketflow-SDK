@@ -9,6 +9,14 @@ describe("SDK Exports", () => {
     expect(typeof sdk.runWorkflow).toBe("function");
   });
 
+  it("should export HTTP API functions", () => {
+    expect(sdk.listWorkflows).toBeDefined();
+    expect(typeof sdk.listWorkflows).toBe("function");
+
+    expect(sdk.getWorkflowDetail).toBeDefined();
+    expect(typeof sdk.getWorkflowDetail).toBe("function");
+  });
+
   it("should export default handlers", () => {
     expect(sdk.defaultSocketConnectionHandler).toBeDefined();
     expect(typeof sdk.defaultSocketConnectionHandler).toBe("function");
@@ -35,6 +43,8 @@ describe("SDK Exports", () => {
     const expectedFunctionExports = [
       "connectSocket",
       "runWorkflow",
+      "listWorkflows",
+      "getWorkflowDetail",
       "defaultSocketConnectionHandler",
       "defaultSocketDisconnectionHandler",
       "defaultFeedbackRequestHandler",
