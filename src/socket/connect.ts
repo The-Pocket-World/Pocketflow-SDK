@@ -78,7 +78,7 @@ export const connectSocket = (
 
   // Configure socket connection options
   const socketOptions: any = {
-    transports: ["websocket"],
+    transports: ["polling"],
     reconnection: true,
     reconnectionAttempts: 5,
     reconnectionDelay: 1000,
@@ -102,6 +102,7 @@ export const connectSocket = (
     if (error.message.includes("authentication")) {
       console.error("Authentication failed. Please check your token.");
     }
+    process.exit(1);
   });
 
   socket.on("disconnect", (reason) => {

@@ -8,6 +8,68 @@ A TypeScript SDK for interacting with the PocketFlow API.
 npm install pocketflow-sdk
 ```
 
+## Running Examples
+
+The SDK includes example implementations that demonstrate how to use the SDK with real-world workflows.
+
+### Environment Setup
+
+1. Copy the `.env.example` file to `.env`:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Edit the `.env` file and add your PocketFlow API key and server URL:
+   ```
+   POCKETFLOW_API_KEY=your_api_key_here
+   POCKETFLOW_SERVER_URL=http://localhost:8080
+   ```
+
+### Running the Twitter Analysis Example
+
+Run the Twitter competitor analysis example:
+
+```bash
+npm run examples:twitter
+```
+
+You can also run the example with the interactive CLI interface:
+
+```bash
+npm run examples:twitter:cli
+```
+
+The CLI interface supports command-line arguments:
+
+```bash
+# Run with specific parameters
+npm run examples:twitter:cli -- --token=your_api_key --prompt="AI assistants" --project="A coding assistant" --limit=10
+
+# Show help
+npm run examples:twitter:cli -- --help
+```
+
+You can also provide the API key and server URL directly when running the example:
+
+```typescript
+import { runTwitterAnalysis } from "pocketflow-sdk/examples/twitter";
+
+// Run with environment variables
+runTwitterAnalysis();
+
+// Or provide values directly
+runTwitterAnalysis({
+  authToken: "your_api_key_here",
+  endpoint: "http://your-server-url",
+  input: {
+    prompt: "AI assistants for developers",
+    project_description: "A coding assistant",
+    limit: 10,
+  },
+});
+```
+
 ## Usage
 
 ### Connecting to the Socket Server
