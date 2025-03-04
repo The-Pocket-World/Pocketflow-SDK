@@ -27,6 +27,7 @@ A TypeScript SDK for interacting with the PocketFlow API, enabling seamless inte
     - [`connectSocket`](#connectsocket)
     - [`runWorkflow`](#runworkflow)
     - [Event Handlers](#event-handlers)
+    - [HTTP API Functions](#http-api-functions)
   - [🧪 Examples](#-examples)
     - [Environment Setup](#environment-setup)
     - [Twitter Analysis Example](#twitter-analysis-example)
@@ -86,6 +87,8 @@ cleanup();
 - **Flexible Configuration**: Customize socket connection and workflow execution options
 - **Comprehensive Logging**: Built-in support for detailed or pretty-printed logs
 - **Interactive Feedback**: Handle user feedback requests during workflow execution
+- **HTTP API Integration**: Access workflow information programmatically
+- **CLI Tools**: Generate type-safe wrapper functions for your workflows
 
 ## 📖 Usage Examples
 
@@ -315,6 +318,7 @@ function connectSocket(
     handleFeedback?: (data: any) => any;
     handleConnection?: () => void;
     handleDisconnection?: (reason: string) => void;
+    handleStreamOutput?: (data: any) => void;
   }
 ): Socket;
 ```
@@ -361,6 +365,40 @@ const myPrettyHandlers = {
     console.log(JSON.stringify(data.data, null, 2));
   },
 };
+```
+
+### HTTP API Functions
+
+The SDK provides functions for accessing workflow information through the HTTP API:
+
+```typescript
+import { listWorkflows, getWorkflowDetail } from "pocketflow-sdk";
+
+// List all workflows with pagination
+const { workflows, meta } = await listWorkflows(
+  {
+    apiKey: "your_api_key_here",
+    verbose: true, // Enable detailed logging
+  },
+  {
+    limit: 10,
+    offset: 0,
+    sort: "updated_at",
+    order: "desc",
+    search: "analysis", // Free text search
+  }
+);
+
+// Get detailed information about a specific workflow
+const workflowDetail = await getWorkflowDetail(
+  {
+    apiKey: "your_api_key_here",
+  },
+  "workflow-id-here"
+);
+
+console.log(`Workflow name: ${workflowDetail.name}`);
+console.log(`Nodes: ${workflowDetail.nodes.length}`);
 ```
 
 ## 🧪 Examples
@@ -439,6 +477,24 @@ runTwitterAnalysis({
 ## 🔐 Authentication
 
 The SDK requires an authentication token for connecting to the PocketFlow API. You can obtain a token from the [PocketFlow Dashboard](https://app.pocketflow.ai).
+
+Authentication can be provided in multiple ways:
+
+1. **Direct token in code**:
+
+   ```typescript
+   const socket = connectSocket("api.pocketflow.ai", {
+     token: "your_api_key_here",
+   });
+   ```
+
+2. **Environment variables**:
+
+   ```
+   POCKETFLOW_API_KEY=your_api_key_here
+   ```
+
+3. **Configuration file** (for CLI operations)
 
 ## 🛠️ Development
 
