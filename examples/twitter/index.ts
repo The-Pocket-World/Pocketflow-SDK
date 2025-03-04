@@ -9,8 +9,10 @@
 import {
   TwitterMonitoringPostsWorkflowInput,
   TwitterMonitoringPostsWorkflowOutput,
-} from "../../src/flows";
+} from "../../src/flows/twitter";
 import * as dotenv from "dotenv";
+import { connectSocket } from "../../src/socket/connect";
+import { generateHtmlReport, saveHtmlReport } from "./template-utils";
 
 // Load environment variables
 dotenv.config();
@@ -22,7 +24,7 @@ export interface TwitterAnalysisOptions {
   /** Authentication token for the PocketFlow API */
   authToken?: string;
   /** Custom input parameters for the workflow */
-  input?: Partial<TwitterMonitoringPostsWorkflowInput>;
+  input?: Partial<TwitterMonitoringPostsWorkflowInput & { query?: string }>;
   /** Whether to save the results to an HTML file */
   saveResults?: boolean;
   /** Enable verbose logging */
@@ -68,7 +70,6 @@ export async function runTwitterAnalysis(
 
     // Create a socket connection manually
     console.log("Creating socket connection manually...");
-    const { connectSocket } = await import("../../src/socket/connect");
 
     // Get server URL from environment variables
     const serverUrl = process.env.POCKETFLOW_SERVER_URL;
@@ -88,17 +89,16 @@ export async function runTwitterAnalysis(
     socket = await connectSocket(serverUrl, {
       token: authToken,
       handleConnection: () => console.log("Socket connected successfully"),
-      handleDisconnection: (reason) =>
+      handleDisconnection: (reason: string) =>
         console.log(`Socket disconnected: ${reason}`),
-      handleLog: (data) => console.log(`Workflow log:`, data),
-      handleStreamOutput: (data) => {
-        console.log(
-          `Custom stream output from node ${data.node}:`,
-          data.action
-        );
-
-        // Just log the stream output but don't try to extract tweets here
+      handleLog: (data: any) => console.log(`Workflow log:`, data),
+      handleStreamOutput: (data: any) => {
+        // Only log essential stream output, not all details
         if (verbose) {
+          console.log(
+            `Custom stream output from node ${data.node}:`,
+            data.action
+          );
           console.log(
             "Stream output data structure:",
             JSON.stringify(data, null, 2)
@@ -134,7 +134,11 @@ export async function runTwitterAnalysis(
         const handlers = {
           // Handle workflow completion
           run_complete: (data: any) => {
-            console.log("Workflow completed with data:", data);
+            if (verbose) {
+              console.log("Workflow completed with data:", data);
+            } else {
+              console.log("Workflow completed successfully!");
+            }
             clearTimeout(timeoutId);
 
             // Extract tweets from the final state
@@ -190,7 +194,9 @@ export async function runTwitterAnalysis(
 
                 console.log("\n📊 Analysis Results:");
                 console.log(`Found ${tweetsData.length} relevant tweets:`);
-                tweetsData.forEach((tweet, index) => {
+                // Only log the first 3 tweets to reduce output
+                const displayLimit = Math.min(3, tweetsData.length);
+                tweetsData.slice(0, displayLimit).forEach((tweet, index) => {
                   console.log(`\nTweet #${index + 1}:`);
                   console.log(
                     `Text: ${tweet.text || tweet.content || tweet.title}`
@@ -202,6 +208,43 @@ export async function runTwitterAnalysis(
                   if (tweet.reason) console.log(`Reason: ${tweet.reason}`);
                   console.log(`URL: ${tweet.url || "N/A"}`);
                 });
+
+                if (tweetsData.length > displayLimit) {
+                  console.log(
+                    `\n... and ${tweetsData.length - displayLimit} more tweets`
+                  );
+                }
+
+                // Generate and save HTML report if requested
+                if (saveResults) {
+                  try {
+                    console.log("\n📝 Generating HTML report...");
+
+                    // Extract query from input or data
+                    const query =
+                      (input as any).query ||
+                      (typeof data.state === "object" && data.state.query) ||
+                      input.prompt ||
+                      "Twitter analysis";
+
+                    // Generate HTML report using the template utility
+                    const htmlContent = generateHtmlReport({
+                      prompt: input.prompt || "AI assistants for developers",
+                      project_description:
+                        input.project_description || "Twitter analysis",
+                      limit: input.limit || 10,
+                      query: query,
+                      tweets: tweetsData,
+                      success: true,
+                    });
+
+                    // Save the HTML report
+                    const reportPath = saveHtmlReport(htmlContent);
+                    console.log(`📊 Report saved to: ${reportPath}`);
+                  } catch (reportError) {
+                    console.error("Error generating HTML report:", reportError);
+                  }
+                }
               }
             } catch (error) {
               console.error("Error extracting tweets from final state:", error);
@@ -299,6 +342,20 @@ export async function runTwitterAnalysis(
               }
 
               reject(new Error(error.message || "Flow execution failed"));
+            }
+          },
+          handleLog: (data: any) => console.log(`Workflow log:`, data),
+          handleStreamOutput: (data: any) => {
+            // Only log essential stream output, not all details
+            if (verbose) {
+              console.log(
+                `Custom stream output from node ${data.node}:`,
+                data.action
+              );
+              console.log(
+                "Stream output data structure:",
+                JSON.stringify(data, null, 2)
+              );
             }
           },
         };
