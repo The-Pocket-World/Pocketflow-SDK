@@ -193,11 +193,17 @@ Usage examples:
 
 // Only execute CLI commands when this module is run directly, not when imported
 if (require.main === module) {
+  // If no command is specified, default to "generate"
+  if (process.argv.length <= 2 || !process.argv[2].startsWith("-")) {
+    // Insert the "generate" command if it's not present
+    if (process.argv.length <= 2 || process.argv[2] !== "generate") {
+      process.argv.splice(2, 0, "generate");
+    }
+  }
+
   // Parse arguments
   program.parse(process.argv);
 
-  // If no arguments provided, show help
-  if (process.argv.length <= 2) {
-    program.help();
-  }
+  // Only show help if requested with --help flag
+  // (Removed the automatic help display when no args provided)
 }
