@@ -27,7 +27,6 @@ describe("Workflow Module", () => {
       runWorkflow(mockSocket as unknown as Socket, workflowId, token, input);
 
       // Verify the emit method was called with the correct parameters
-      // Note: The actual implementation might use flowId instead of workflow_id
       expect(emitSpy).toHaveBeenCalledWith(
         "run_workflow",
         expect.objectContaining({
@@ -46,9 +45,14 @@ describe("Workflow Module", () => {
       runWorkflow(mockSocket as unknown as Socket, workflowId, token, input);
 
       // Check some of the default handlers were registered
-      expect(onSpy).toHaveBeenCalledWith("run_complete", expect.any(Function));
-      expect(onSpy).toHaveBeenCalledWith("run_error", expect.any(Function));
-      expect(onSpy).toHaveBeenCalledWith("run_start", expect.any(Function));
+      expect(onSpy).toHaveBeenCalledWith(
+        "workflow_received",
+        expect.any(Function)
+      );
+      expect(onSpy).toHaveBeenCalledWith(
+        "workflow_error",
+        expect.any(Function)
+      );
     });
 
     it("should register custom handlers if provided in options", () => {
@@ -56,8 +60,12 @@ describe("Workflow Module", () => {
       const customRunCompleteHandler = jest.fn();
       const customRunErrorHandler = jest.fn();
 
-      // Spy on the socket.on method
+      // Spy on the socket.on and removeAllListeners methods
       const onSpy = jest.spyOn(mockSocket, "on");
+      const removeAllListenersSpy = jest.spyOn(
+        mockSocket,
+        "removeAllListeners"
+      );
 
       // Call the runWorkflow function with custom handlers
       runWorkflow(mockSocket as unknown as Socket, workflowId, token, input, {
@@ -66,6 +74,10 @@ describe("Workflow Module", () => {
           run_error: customRunErrorHandler,
         },
       });
+
+      // Check that removeAllListeners was called for the events
+      expect(removeAllListenersSpy).toHaveBeenCalledWith("run_complete");
+      expect(removeAllListenersSpy).toHaveBeenCalledWith("run_error");
 
       // Check the custom handlers were registered
       expect(onSpy).toHaveBeenCalledWith(
@@ -96,8 +108,14 @@ describe("Workflow Module", () => {
       );
 
       // And that default handlers were used for other events
-      expect(onSpy).toHaveBeenCalledWith("run_error", expect.any(Function));
-      expect(onSpy).toHaveBeenCalledWith("run_start", expect.any(Function));
+      expect(onSpy).toHaveBeenCalledWith(
+        "workflow_received",
+        expect.any(Function)
+      );
+      expect(onSpy).toHaveBeenCalledWith(
+        "workflow_error",
+        expect.any(Function)
+      );
     });
   });
 

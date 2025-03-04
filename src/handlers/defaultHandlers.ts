@@ -31,6 +31,20 @@ export const defaultFeedbackRequestHandler = (data: any) => {
 };
 
 /**
+ * Default stream output handler.
+ * Logs the stream output data with appropriate formatting.
+ */
+export const defaultStreamOutputHandler = (data: any) => {
+  const prefix = data.isError ? "❌ Error" : "📤 Output";
+  console.log(
+    `${prefix} from node '${data.node}' (${data.type}): ${data.action}`
+  );
+  if (data.state) {
+    console.log("State:", data.state);
+  }
+};
+
+/**
  * Default connection handler.
  * Simply logs the connection event.
  */

@@ -296,7 +296,7 @@ export const runWorkflow = (
       if (handler !== undefined && handler !== null) {
         console.log(`DEBUG: Registering handler for event: ${event}`);
         // Remove any existing handlers for this event to avoid duplicates
-        socket.off(event);
+        socket.removeAllListeners(event);
         // Add the new handler
         socket.on(event, handler as any);
       }
@@ -307,14 +307,16 @@ export const runWorkflow = (
   const payload = {
     flowId: workflowId,
     input: input,
+    token: authToken, // Include the authentication token in the payload
   };
 
   console.log(`DEBUG: Preparing to emit workflow event with payload`);
   console.log(`DEBUG: Payload flowId: ${payload.flowId}`);
+  console.log(`DEBUG: Token included: ${authToken ? "Yes" : "No"}`);
   console.log(`DEBUG: Full payload:`, JSON.stringify(payload, null, 2));
 
-  // Use run_flow as the event name
-  const eventName = "run_flow";
+  // Use run_workflow as the event name as specified by the server
+  const eventName = "run_workflow";
 
   try {
     // Emit the event
@@ -323,13 +325,13 @@ export const runWorkflow = (
     console.log(`DEBUG: ${eventName} event emitted successfully`);
 
     // Add a listener for acknowledgment
-    socket.once("flow_received", (data) => {
-      console.log(`DEBUG: Server acknowledged flow receipt:`, data);
+    socket.once("workflow_received", (data) => {
+      console.log(`DEBUG: Server acknowledged workflow receipt:`, data);
     });
 
     // Add a listener for errors
-    socket.once("flow_error", (error) => {
-      console.error(`DEBUG: Server reported flow error:`, error);
+    socket.once("workflow_error", (error) => {
+      console.error(`DEBUG: Server reported workflow error:`, error);
     });
   } catch (error) {
     console.error(`DEBUG: Error emitting workflow event:`, error);

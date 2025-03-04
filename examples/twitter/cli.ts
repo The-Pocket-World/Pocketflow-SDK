@@ -3,6 +3,12 @@
  *
  * This file provides a command-line interface for the Twitter example.
  * It demonstrates how to use the statically typed Twitter implementation with user input.
+ *
+ * BEST PRACTICES DEMONSTRATED:
+ * 1. User-friendly CLI interface with sensible defaults
+ * 2. Real-time processing of results as they arrive
+ * 3. Proper socket management and cleanup
+ * 4. Comprehensive error handling
  */
 
 import { runTwitterAnalysis, TwitterAnalysisOptions } from "./index";
@@ -100,6 +106,8 @@ async function promptUser(
  * Run the CLI interface
  */
 async function runCli() {
+  let socket: any = null;
+
   console.log(
     "🔍 Twitter Analysis CLI - Using Statically Typed Implementation"
   );
@@ -155,13 +163,61 @@ async function runCli() {
     console.log("\n⏳ Running Twitter analysis...");
     const result = await runTwitterAnalysis(options);
 
+    // Save the socket for later disconnection
+    socket = result.socket;
+    delete result.socket; // Remove socket from result to avoid circular references
+
     console.log("\n✅ Analysis completed successfully!");
-    console.log(`Found ${result.tweets.length} tweets matching your criteria.`);
+
+    // The results have already been processed and displayed in the stream_output handler
+    // Just show a summary here
+    if (result.tweets && Array.isArray(result.tweets)) {
+      console.log(
+        `Found ${result.tweets.length} tweets matching your criteria.`
+      );
+    } else {
+      console.log("No tweets were found matching your criteria.");
+    }
+
+    // Now that we've processed everything, disconnect the socket
+    if (socket) {
+      console.log("Disconnecting socket before exiting...");
+      try {
+        if (typeof socket.disconnect === "function") {
+          socket.disconnect();
+          console.log("Socket disconnected successfully");
+        }
+      } catch (error) {
+        console.error("Error disconnecting socket:", error);
+      }
+    }
+
+    process.exit(0);
   } catch (error) {
     console.error(
       "\n❌ Error:",
       error instanceof Error ? error.message : "Unknown error"
     );
+
+    // Try to disconnect any socket that might be in the error object
+    if (error && typeof error === "object" && "socket" in error) {
+      socket = (error as any).socket;
+      delete (error as any).socket; // Remove socket from error to avoid circular references
+    }
+
+    // Disconnect the socket if available
+    if (socket) {
+      console.log("Disconnecting socket before exiting due to error...");
+      try {
+        if (typeof socket.disconnect === "function") {
+          socket.disconnect();
+          console.log("Socket disconnected successfully");
+        }
+      } catch (disconnectError) {
+        console.error("Error disconnecting socket:", disconnectError);
+      }
+    }
+
     process.exit(1);
   }
 }

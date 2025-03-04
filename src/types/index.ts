@@ -21,6 +21,11 @@ export type GenerationUpdateHandler = (data: any) => void;
 export type GenerationCompleteHandler = (data: any) => void;
 
 /**
+ * Handler function for stream output events
+ */
+export type StreamOutputHandler = (data: any) => void;
+
+/**
  * Handler function for socket connection events
  */
 export type SocketConnectionHandler = () => void;
@@ -63,6 +68,11 @@ export interface SocketConfig {
    * Function to handle generation complete messages
    */
   handleGenerationComplete?: GenerationCompleteHandler;
+
+  /**
+   * Function to handle stream output events
+   */
+  handleStreamOutput?: StreamOutputHandler;
 
   /**
    * Function to handle socket connection event

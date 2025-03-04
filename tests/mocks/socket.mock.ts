@@ -22,6 +22,22 @@ export class MockSocket extends EventEmitter {
     return super.emit(event, ...args);
   }
 
+  off(eventName: string | symbol, listener: (...args: any[]) => void): this {
+    if (typeof eventName === "string" && this.eventHandlers[eventName]) {
+      this.eventHandlers[eventName] = this.eventHandlers[eventName].filter(
+        (handler) => handler !== listener
+      );
+    }
+    return super.off(eventName, listener);
+  }
+
+  removeAllListeners(event?: string | symbol): this {
+    if (typeof event === "string" && this.eventHandlers[event]) {
+      this.eventHandlers[event] = [];
+    }
+    return super.removeAllListeners(event);
+  }
+
   disconnect(): void {
     this.connected = false;
     this.emit("disconnect", "io client disconnect");
