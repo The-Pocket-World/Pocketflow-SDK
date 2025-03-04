@@ -25,6 +25,10 @@ export interface ServerEmittedEvents {
   };
   run_start: { message: string };
 
+  // Additional events for testing
+  workflow_received: { message: string };
+  workflow_error: { message: string; stack?: string };
+
   // Stream and node related events
   stream_output: {
     type: string;
@@ -75,6 +79,15 @@ export const defaultHandlers: EventHandlers = {
   },
   run_start: (data) => {
     console.log(`🚀 Workflow Started: ${data.message}`);
+  },
+
+  // Additional event handlers for testing
+  workflow_received: (data) => {
+    console.log(`📥 Workflow Received: ${data.message}`);
+  },
+  workflow_error: (data) => {
+    console.error(`❌ Workflow Error: ${data.message}`);
+    if (data.stack) console.error(`Stack: ${data.stack}`);
   },
 
   // Stream and node related events
@@ -244,41 +257,29 @@ export const runWorkflow = (
     ? { ...prettyLogHandlers, ...handlers }
     : { ...defaultHandlers, ...handlers };
 
-  // Register all event handlers
-  Object.entries(eventHandlers).forEach(([event, handler]) => {
+  // Register event handlers for custom handlers provided, removing existing handlers for those events
+  Object.entries(handlers).forEach(([event, handler]) => {
+    // Remove any existing listeners for this event
+    socket.removeAllListeners(event);
+
+    // Register the custom handler
     if (handler) {
+      socket.on(event, handler);
+    }
+  });
+
+  // Register default handlers for events not specified in custom handlers
+  Object.entries(eventHandlers).forEach(([event, handler]) => {
+    // Only add if not already added as a custom handler
+    if (!handlers[event as keyof ServerEmittedEvents] && handler) {
       socket.on(event, handler as any);
     }
   });
 
-  // Define the workflow event payload
-  const payload = {
+  // Emit the run_workflow event
+  socket.emit("run_workflow", {
     flowId: workflowId,
-    input,
     token: authToken,
-  };
-
-  try {
-    // Emit the run_workflow event to start the workflow
-    const eventName = "run_workflow";
-    socket.emit(eventName, payload, (data: any) => {
-      if (data && data.error) {
-        console.error(`Error running workflow: ${data.error}`);
-        if (eventHandlers.run_error) {
-          (eventHandlers.run_error as any)({
-            message: data.error,
-            stack: data.stack,
-          });
-        }
-      }
-    });
-  } catch (error: any) {
-    console.error(`Error emitting workflow event: ${error.message}`);
-    if (eventHandlers.run_error) {
-      (eventHandlers.run_error as any)({
-        message: error.message,
-        stack: error.stack,
-      });
-    }
-  }
+    input,
+  });
 };
