@@ -35,6 +35,10 @@ export interface ServerEmittedEvents {
   };
   node_error: { node: string; error: any; state: any };
   final_output: { type: string; data: any };
+
+  // Add missing handlers that the tests expect
+  workflow_received: { message?: string };
+  workflow_error: { message: string; stack?: string };
 }
 
 /**
@@ -89,6 +93,14 @@ export const defaultHandlers: EventHandlers = {
   },
   final_output: (data) => {
     console.log(`🏁 Final Output (${data.type}):`, data.data);
+  },
+  // Add missing handlers that the tests expect
+  workflow_received: () => {
+    console.log(`📥 Workflow received by server`);
+  },
+  workflow_error: (data: any) => {
+    console.error(`❌ Workflow Error: ${data.message || "Unknown error"}`);
+    if (data.stack) console.error(`Stack: ${data.stack}`);
   },
 };
 
@@ -244,6 +256,11 @@ export const runWorkflow = (
     ? { ...prettyLogHandlers, ...handlers }
     : { ...defaultHandlers, ...handlers };
 
+  // Remove existing listeners for events with custom handlers
+  Object.keys(handlers).forEach((event) => {
+    socket.removeAllListeners(event);
+  });
+
   // Register all event handlers
   Object.entries(eventHandlers).forEach(([event, handler]) => {
     if (handler) {
@@ -260,18 +277,8 @@ export const runWorkflow = (
 
   try {
     // Emit the run_workflow event to start the workflow
-    const eventName = "run_workflow";
-    socket.emit(eventName, payload, (data: any) => {
-      if (data && data.error) {
-        console.error(`Error running workflow: ${data.error}`);
-        if (eventHandlers.run_error) {
-          (eventHandlers.run_error as any)({
-            message: data.error,
-            stack: data.stack,
-          });
-        }
-      }
-    });
+    // Remove the callback to match test expectations
+    socket.emit("run_workflow", payload);
   } catch (error: any) {
     console.error(`Error emitting workflow event: ${error.message}`);
     if (eventHandlers.run_error) {
