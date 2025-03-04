@@ -218,123 +218,67 @@ export const runWorkflow = (
   input: any,
   options: WorkflowRunnerOptions = {}
 ): void => {
-  console.log("=== DEBUG: runWorkflow called ===");
-  console.log(`DEBUG: Workflow ID: ${workflowId}`);
-  console.log(
-    `DEBUG: Auth token provided: ${
-      authToken ? "Yes (length: " + authToken.length + ")" : "No"
-    }`
-  );
-  console.log(`DEBUG: Input:`, JSON.stringify(input, null, 2));
-  console.log(
-    `DEBUG: Options:`,
-    JSON.stringify(
-      {
-        ...options,
-        handlers: options.handlers ? Object.keys(options.handlers) : undefined,
-      },
-      null,
-      2
-    )
-  );
-
   // Check if socket is connected
   if (!socket) {
-    console.error("DEBUG: Socket is null or undefined");
     throw new Error("Socket is null or undefined");
   }
 
   if (typeof socket.connected === "boolean") {
-    console.log(`DEBUG: Socket connected status: ${socket.connected}`);
-
     if (!socket.connected) {
-      console.error("DEBUG: Socket is not connected");
-
-      // Try to reconnect if possible
-      if (typeof socket.connect === "function") {
-        console.log("DEBUG: Attempting to reconnect socket...");
-        try {
-          socket.connect();
-
-          // Wait a bit for the connection to establish
-          setTimeout(() => {
-            if (socket.connected) {
-              console.log("DEBUG: Socket reconnected successfully");
-            } else {
-              console.error("DEBUG: Socket failed to reconnect");
-              throw new Error("Socket failed to reconnect");
-            }
-          }, 1000);
-        } catch (reconnectError) {
-          console.error("DEBUG: Error reconnecting socket:", reconnectError);
-          throw new Error(
-            "Failed to reconnect socket: " +
-              (reconnectError instanceof Error
-                ? reconnectError.message
-                : "Unknown error")
-          );
-        }
-      } else {
-        throw new Error("Socket is not connected and cannot be reconnected");
+      console.log("Socket not connected, attempting to reconnect...");
+      try {
+        // Attempt to reconnect the socket
+        socket.connect();
+      } catch (error) {
+        console.error("Failed to reconnect socket:", error);
+        throw new Error("Failed to reconnect socket");
       }
     }
-  } else {
-    console.warn(
-      "DEBUG: Socket.connected is not a boolean, cannot determine connection status"
-    );
   }
 
-  // Extract options
-  const { handlers = {}, prettyLogs = false, verbose = false } = options;
+  // Set up the options with defaults
+  const { handlers = {}, prettyLogs = false, verbose = true } = options;
 
-  // Register event handlers
-  if (handlers) {
-    console.log(
-      `DEBUG: Registering ${Object.keys(handlers).length} event handlers`
-    );
-    Object.entries(handlers).forEach(([event, handler]) => {
-      if (handler !== undefined && handler !== null) {
-        console.log(`DEBUG: Registering handler for event: ${event}`);
-        // Remove any existing handlers for this event to avoid duplicates
-        socket.removeAllListeners(event);
-        // Add the new handler
-        socket.on(event, handler as any);
-      }
-    });
-  }
+  // Combine default handlers with any custom handlers provided
+  const eventHandlers: EventHandlers = prettyLogs
+    ? { ...prettyLogHandlers, ...handlers }
+    : { ...defaultHandlers, ...handlers };
 
-  // Prepare the payload - use a simple structure with just flowId and input
+  // Register all event handlers
+  Object.entries(eventHandlers).forEach(([event, handler]) => {
+    if (handler) {
+      socket.on(event, handler as any);
+    }
+  });
+
+  // Define the workflow event payload
   const payload = {
     flowId: workflowId,
-    input: input,
-    token: authToken, // Include the authentication token in the payload
+    input,
+    token: authToken,
   };
 
-  console.log(`DEBUG: Preparing to emit workflow event with payload`);
-  console.log(`DEBUG: Payload flowId: ${payload.flowId}`);
-  console.log(`DEBUG: Token included: ${authToken ? "Yes" : "No"}`);
-  console.log(`DEBUG: Full payload:`, JSON.stringify(payload, null, 2));
-
-  // Use run_workflow as the event name as specified by the server
-  const eventName = "run_workflow";
-
   try {
-    // Emit the event
-    console.log(`DEBUG: Emitting ${eventName} event`);
-    socket.emit(eventName, payload);
-    console.log(`DEBUG: ${eventName} event emitted successfully`);
-
-    // Add a listener for acknowledgment
-    socket.once("workflow_received", (data) => {
-      console.log(`DEBUG: Server acknowledged workflow receipt:`, data);
+    // Emit the run_workflow event to start the workflow
+    const eventName = "run_workflow";
+    socket.emit(eventName, payload, (data: any) => {
+      if (data && data.error) {
+        console.error(`Error running workflow: ${data.error}`);
+        if (eventHandlers.run_error) {
+          (eventHandlers.run_error as any)({
+            message: data.error,
+            stack: data.stack,
+          });
+        }
+      }
     });
-
-    // Add a listener for errors
-    socket.once("workflow_error", (error) => {
-      console.error(`DEBUG: Server reported workflow error:`, error);
-    });
-  } catch (error) {
-    console.error(`DEBUG: Error emitting workflow event:`, error);
-    throw error;
+  } catch (error: any) {
+    console.error(`Error emitting workflow event: ${error.message}`);
+    if (eventHandlers.run_error) {
+      (eventHandlers.run_error as any)({
+        message: error.message,
+        stack: error.stack,
+      });
+    }
   }
 };

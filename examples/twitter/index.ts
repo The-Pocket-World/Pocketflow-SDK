@@ -46,7 +46,24 @@ export async function runTwitterAnalysis(
     options.saveResults !== undefined ? options.saveResults : true;
   const verbose = options.verbose !== undefined ? options.verbose : false;
 
+  // Suppress debug logs by intercepting console.log
+  // This is a workaround to avoid debug logs without changing environment variables
+  const originalConsoleLog = console.log;
+  if (!verbose) {
+    console.log = function (...args) {
+      // Only show logs that don't start with "DEBUG:" or "=== DEBUG:" prefix
+      const firstArg = args[0];
+      if (typeof firstArg === "string") {
+        if (firstArg.includes("DEBUG:") || firstArg.includes("=== DEBUG:")) {
+          return; // Suppress debug logs
+        }
+      }
+      originalConsoleLog.apply(console, args);
+    };
+  }
+
   try {
+    // Only log the start message
     console.log("🔍 Running Twitter analysis workflow...");
 
     // Ensure we have an auth token
@@ -58,18 +75,12 @@ export async function runTwitterAnalysis(
 
     // Define the input for the workflow
     const input: TwitterMonitoringPostsWorkflowInput = {
-      prompt: options.input?.prompt || "AI assistants for developers",
+      prompt: "AI assistants for developers",
       project_description:
-        options.input?.project_description ||
-        "We are building AI assistants to help developers write code faster and more efficiently.",
-      limit: options.input?.limit || 10,
+        "A coding assistant that helps developers write better code",
+      limit: 10,
+      ...(options.input || {}),
     };
-
-    console.log(`🔎 Searching for tweets related to: "${input.prompt}"`);
-    console.log(`📝 Project context: ${input.project_description}`);
-
-    // Create a socket connection manually
-    console.log("Creating socket connection manually...");
 
     // Get server URL from environment variables
     const serverUrl = process.env.POCKETFLOW_SERVER_URL;
@@ -85,26 +96,13 @@ export async function runTwitterAnalysis(
     // Create a shared result reference we can update from the stream output handler
     const sharedResult: TwitterMonitoringPostsWorkflowOutput = { tweets: [] };
 
-    // Connect to the socket server
+    // Connect to the socket server - minimize logging in handlers
     socket = await connectSocket(serverUrl, {
       token: authToken,
-      handleConnection: () => console.log("Socket connected successfully"),
-      handleDisconnection: (reason: string) =>
-        console.log(`Socket disconnected: ${reason}`),
-      handleLog: (data: any) => console.log(`Workflow log:`, data),
-      handleStreamOutput: (data: any) => {
-        // Only log essential stream output, not all details
-        if (verbose) {
-          console.log(
-            `Custom stream output from node ${data.node}:`,
-            data.action
-          );
-          console.log(
-            "Stream output data structure:",
-            JSON.stringify(data, null, 2)
-          );
-        }
-      },
+      handleConnection: () => {}, // No logging for connection
+      handleDisconnection: (reason: string) => {}, // No logging for disconnection
+      handleLog: (data: any) => {}, // No logging for workflow logs
+      handleStreamOutput: (data: any) => {}, // No logging for stream output
     });
 
     // Ensure we're connected
@@ -130,14 +128,14 @@ export async function runTwitterAnalysis(
           }
         }, 5 * 60 * 1000); // 5 minutes timeout
 
-        // Define handlers for workflow events
+        // Define handlers for workflow events - minimize logging
         const handlers = {
           // Handle workflow completion
           run_complete: (data: any) => {
             if (verbose) {
               console.log("Workflow completed with data:", data);
             } else {
-              console.log("Workflow completed successfully!");
+              console.log("✅ Workflow completed successfully!");
             }
             clearTimeout(timeoutId);
 
@@ -150,9 +148,7 @@ export async function runTwitterAnalysis(
                 if (typeof data.state === "object" && data.state.tweets) {
                   // If data.state is an object with tweets property
                   tweetsData = data.state.tweets;
-                  console.log(
-                    `Found ${tweetsData.length} tweets in final state object`
-                  );
+                  console.log(`Found ${tweetsData.length} tweets in results`);
                 } else if (
                   typeof data.state === "string" &&
                   data.state.includes("tweets:")
@@ -181,7 +177,7 @@ export async function runTwitterAnalysis(
                       // Parse the JSON array
                       tweetsData = JSON.parse(tweetsJson);
                       console.log(
-                        `Found ${tweetsData.length} tweets in final state`
+                        `Found ${tweetsData.length} tweets in results`
                       );
                     }
                   }
@@ -255,135 +251,46 @@ export async function runTwitterAnalysis(
               // Resolve with the results
               resolve({ ...sharedResult, socket });
 
-              // Disconnect socket after workflow is complete
+              // Just disconnect without logging
               if (socket && typeof socket.disconnect === "function") {
-                console.log(
-                  "Disconnecting socket after workflow completion..."
-                );
                 socket.disconnect();
               }
             }
           },
           run_error: (error: any) => {
-            console.error("Workflow execution failed:", error.message);
+            console.error("❌ Error:", error.message);
             clearTimeout(timeoutId);
             if (!isCompleted) {
               isCompleted = true;
 
-              // Disconnect socket after error
+              // Disconnect socket without logging
               if (socket && typeof socket.disconnect === "function") {
-                console.log("Disconnecting socket after workflow error...");
                 socket.disconnect();
               }
 
               reject(new Error(error.message || "Workflow execution failed"));
             }
           },
-          final_output: (data: any) => {
-            console.log("Received final output from workflow");
-            clearTimeout(timeoutId);
-            // If we haven't resolved yet, resolve with the final output
-            if (!isCompleted) {
-              isCompleted = true;
-              // We've already processed the results in stream_output
-              // Just resolve with the socket for later disconnection
-              resolve({ ...result, socket });
-
-              // Disconnect socket after final output
-              if (socket && typeof socket.disconnect === "function") {
-                console.log(
-                  "Disconnecting socket after receiving final output..."
-                );
-                socket.disconnect();
-              }
-            }
-          },
-          // Add more handlers for debugging
-          run_start: (data: any) => {
-            console.log("Workflow started:", data.message);
-          },
-          node_error: (data: any) => {
-            console.error(`Error in node ${data.node}:`, data.error);
-          },
-          // Add handlers for local development
-          flow_complete: (data: any) => {
-            console.log("Flow completed (local development)!");
-            clearTimeout(timeoutId);
-            if (!isCompleted) {
-              isCompleted = true;
-              // We've already processed the results in stream_output
-              // Just resolve with the socket for later disconnection
-              resolve({ ...result, socket });
-
-              // Disconnect socket after flow completion
-              if (socket && typeof socket.disconnect === "function") {
-                console.log(
-                  "Disconnecting socket after flow completion (local development)..."
-                );
-                socket.disconnect();
-              }
-            }
-          },
-          flow_error: (error: any) => {
-            console.error(
-              "Flow execution failed (local development):",
-              error.message
-            );
-            clearTimeout(timeoutId);
-            if (!isCompleted) {
-              isCompleted = true;
-
-              // Disconnect socket after flow error
-              if (socket && typeof socket.disconnect === "function") {
-                console.log(
-                  "Disconnecting socket after flow error (local development)..."
-                );
-                socket.disconnect();
-              }
-
-              reject(new Error(error.message || "Flow execution failed"));
-            }
-          },
-          handleLog: (data: any) => console.log(`Workflow log:`, data),
-          handleStreamOutput: (data: any) => {
-            // Only log essential stream output, not all details
-            if (verbose) {
-              console.log(
-                `Custom stream output from node ${data.node}:`,
-                data.action
-              );
-              console.log(
-                "Stream output data structure:",
-                JSON.stringify(data, null, 2)
-              );
-            }
-          },
+          // Empty handlers for other events to prevent default logging
+          handleLog: (data: any) => {},
+          handleStreamOutput: (data: any) => {},
+          run_start: (data: any) => {},
+          run_warning: (data: any) => {},
+          final_output: (data: any) => {},
+          node_error: (data: any) => {},
         };
 
         // Run the workflow with the handlers
-        console.log("Running workflow with ID 'twitter_monitoring_posts'");
-        console.log("Workflow input:", JSON.stringify(input, null, 2));
-
-        try {
-          // Use "twitter" as the workflow ID as specified by the server
-          const workflowId = "twitter";
-
-          // Run the workflow
-          runWorkflow(socket, workflowId, authToken, input, {
-            handlers,
-            prettyLogs: true,
-            verbose: true,
-          });
-
-          console.log("Workflow execution initiated");
-        } catch (workflowError) {
-          console.error("Error in runWorkflow:", workflowError);
-          clearTimeout(timeoutId);
-          if (!isCompleted) {
-            isCompleted = true;
-            reject(workflowError);
-          }
+        if (verbose) {
+          console.log("Running workflow with ID 'twitter'");
+          console.log("Workflow input:", JSON.stringify(input, null, 2));
         }
+
+        runWorkflow(socket, "twitter", authToken, input, {
+          handlers,
+          prettyLogs: false, // Disable pretty logs
+          verbose: false, // Disable verbose logging
+        });
       }
     );
   } catch (error) {
@@ -398,6 +305,9 @@ export async function runTwitterAnalysis(
     }
 
     throw error; // Re-throw the error for the caller to handle
+  } finally {
+    // Restore the original console.log function
+    console.log = originalConsoleLog;
   }
 }
 
