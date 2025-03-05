@@ -35,27 +35,22 @@ export function generateHtmlReport(
       border-radius: 8px 8px 0 0;
       margin-bottom: 20px;
     }
-    .video-info {
-      display: flex;
-      gap: 20px;
-      margin-bottom: 30px;
+    .header-links {
+      margin-top: 10px;
     }
-    .video-thumbnail {
-      flex: 0 0 320px;
+    .header-links a {
+      color: white;
+      font-weight: bold;
+      text-decoration: underline;
+      background-color: rgba(255, 255, 255, 0.2);
+      padding: 5px 10px;
+      border-radius: 4px;
+      display: inline-block;
+      transition: background-color 0.2s;
     }
-    .video-thumbnail img {
-      width: 100%;
-      border-radius: 8px;
-    }
-    .video-details {
-      flex: 1;
-    }
-    .summary-section, .ideas-section {
-      background-color: white;
-      padding: 20px;
-      border-radius: 8px;
-      margin-bottom: 30px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    .header-links a:hover {
+      background-color: rgba(255, 255, 255, 0.3);
+      text-decoration: none;
     }
     .startup-idea {
       background-color: white;
@@ -102,18 +97,6 @@ export function generateHtmlReport(
     .tweet-meta div {
       margin-right: 20px;
     }
-    .key-points {
-      background-color: #f8f9fa;
-      padding: 15px;
-      border-radius: 8px;
-      margin-top: 20px;
-    }
-    .key-point {
-      margin-bottom: 10px;
-      padding: 10px;
-      background-color: #e8f4f8;
-      border-radius: 4px;
-    }
     .score {
       display: inline-block;
       padding: 3px 8px;
@@ -122,6 +105,13 @@ export function generateHtmlReport(
       font-weight: bold;
       background-color: #f2f2f2;
       margin-left: 10px;
+    }
+    .ideas-section {
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     a {
       color: #1da1f2;
@@ -136,29 +126,8 @@ export function generateHtmlReport(
   <div class="header">
     <h1>YouTube to Twitter Startup Pipeline Report</h1>
     <p>Generated on {{date}}</p>
-  </div>
-
-  <div class="video-info">
-    <div class="video-thumbnail">
-      <img src="{{thumbnailUrl}}" alt="Video thumbnail">
-    </div>
-    <div class="video-details">
-      <h2>{{videoTitle}}</h2>
-      <p><strong>Channel:</strong> {{channelName}}</p>
-      <p><strong>Published:</strong> {{publishDate}}</p>
+    <div class="header-links">
       <p><a href="{{videoUrl}}" target="_blank">Watch on YouTube</a></p>
-    </div>
-  </div>
-
-  <div class="summary-section">
-    <h2>Video Summary</h2>
-    <p>{{summary}}</p>
-    
-    <div class="key-points">
-      <h3>Key Points</h3>
-      <div class="key-points-list">
-        {{keyPointsList}}
-      </div>
     </div>
   </div>
 
@@ -189,20 +158,7 @@ export function generateHtmlReport(
     // Prepare data for template
     const date = new Date().toLocaleString();
     const videoMetadata = result.videoMetadata || {};
-    const thumbnailUrl =
-      videoMetadata.thumbnail_url ||
-      "https://via.placeholder.com/320x180?text=No+Thumbnail";
-    const videoTitle = videoMetadata.title || "Untitled Video";
-    const channelName = videoMetadata.channel_name || "Unknown Channel";
-    const publishDate = videoMetadata.publish_date || "Unknown";
     const videoUrl = videoMetadata.url || "#";
-
-    // Generate key points HTML
-    const keyPointsList = result.keyPoints
-      .map((point) => {
-        return `<div class="key-point">${typeof point === "string" ? point : JSON.stringify(point)}</div>`;
-      })
-      .join("");
 
     // Generate startup ideas with tweets HTML
     const startupIdeasCount = result.startupIdeas.length;
@@ -221,7 +177,13 @@ export function generateHtmlReport(
       .map((ideaWithTweets) => {
         // Add defensive check to handle undefined tweets
         const tweets = ideaWithTweets.tweets || [];
-        const tweetsHtml = tweets
+
+        // Filter tweets with relevance score of 4.00 or above
+        const filteredTweets = tweets.filter(
+          (tweet) => (tweet.score || 0) >= 4.0
+        );
+
+        const tweetsHtml = filteredTweets
           .map((tweet) => {
             let tweetHtml = tweetTemplate;
             const metadata = tweet.metadata || {};
@@ -262,8 +224,8 @@ export function generateHtmlReport(
           <h3>Startup Idea</h3>
         </div>
         <p>${ideaWithTweets.idea}</p>
-        <h4>Related Tweets</h4>
-        ${tweetsHtml.length > 0 ? tweetsHtml : "<p>No related tweets found.</p>"}
+        <h4>Related Tweets (Score ≥ 4.00)</h4>
+        ${tweetsHtml.length > 0 ? tweetsHtml : "<p>No related tweets with relevance score ≥ 4.00 found.</p>"}
       </div>`;
       })
       .join("");
@@ -271,16 +233,7 @@ export function generateHtmlReport(
     // Replace placeholders with data
     let html = mainTemplate;
     html = html.replace("{{date}}", date);
-    html = html.replace("{{thumbnailUrl}}", thumbnailUrl);
-    html = html.replace("{{videoTitle}}", videoTitle);
-    html = html.replace("{{channelName}}", channelName);
-    html = html.replace("{{publishDate}}", publishDate);
     html = html.replace("{{videoUrl}}", videoUrl);
-    html = html.replace(
-      "{{summary}}",
-      result.summary || "No summary available"
-    );
-    html = html.replace("{{keyPointsList}}", keyPointsList);
     html = html.replace("{{startupIdeasCount}}", startupIdeasCount.toString());
     html = html.replace("{{startupIdeasList}}", startupIdeasList);
 
