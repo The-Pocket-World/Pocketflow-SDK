@@ -8,11 +8,11 @@
  * 4. Generate an HTML report with all the information
  */
 
-import { runYoutubeSummarizerWorkflow } from "../../src/flows/youtube_summarizer";
-import { runTwitterMonitoringPostsWorkflow } from "../../src/flows/twitter";
 import * as dotenv from "dotenv";
-import { generateHtmlReport, saveHtmlReport } from "./template-utils";
+import { runTwitterMonitoringPostsWorkflow } from "../../src/flows/twitter";
+import { runYoutubeSummarizerWorkflow } from "../../src/flows/youtube_summarizer";
 import { extractStartupIdeas } from "./anthropic-utils";
+import { generateHtmlReport, saveHtmlReport } from "./template-utils";
 
 // Load environment variables
 dotenv.config();
@@ -31,6 +31,10 @@ export interface YouTubeToTwitterPipelineOptions {
   summaryLength?: string;
   /** Maximum number of tweets to retrieve per startup idea */
   tweetsPerIdea?: number;
+  /** Minimum number of likes for a tweet to be included */
+  minLikes?: number;
+  /** Minimum number of retweets for a tweet to be included */
+  minRetweets?: number;
   /** Whether to save the results to an HTML file */
   saveResults?: boolean;
   /** Enable verbose logging */
@@ -80,6 +84,9 @@ export async function runYouTubeToTwitterPipeline(
     options.saveResults !== undefined ? options.saveResults : true;
   const verbose = options.verbose !== undefined ? options.verbose : false;
   const tweetsPerIdea = options.tweetsPerIdea || 5;
+  const minLikes = options.minLikes !== undefined ? options.minLikes : 0;
+  const minRetweets =
+    options.minRetweets !== undefined ? options.minRetweets : 0;
   const summaryLength = options.summaryLength || "medium";
 
   if (!authToken) {
@@ -97,8 +104,11 @@ export async function runYouTubeToTwitterPipeline(
   try {
     // Create a shared socket connection for all workflows
     const { connectSocket } = await import("../../src/socket/connect");
-    const sharedSocket = await connectSocket(process.env.POCKETFLOW_SERVER_URL || "api.pocketflow.ai", { token: authToken });
-    
+    const sharedSocket = await connectSocket(
+      process.env.POCKETFLOW_SERVER_URL || "api.pocketflow.ai",
+      { token: authToken }
+    );
+
     try {
       // Step 1: Summarize the YouTube video
       if (verbose) console.log("📝 Summarizing YouTube video...");
@@ -139,69 +149,80 @@ export async function runYouTubeToTwitterPipeline(
       const startupIdeasWithTweets: StartupIdeaWithTweets[] = [];
 
       for (const idea of startupIdeas) {
-        if (verbose) console.log(`  Searching for: ${idea.substring(0, 40)}...`);
+        if (verbose)
+          console.log(`  Searching for: ${idea.substring(0, 40)}...`);
 
         const twitterResult = await runTwitterMonitoringPostsWorkflow(
           {
             prompt: idea,
             project_description: "Startup idea from YouTube video",
             limit: tweetsPerIdea,
-            min_likes: 50,
-            min_retweets: 20,
+            min_likes: minLikes,
+            min_retweets: minRetweets,
           },
           authToken,
           sharedSocket // Pass the shared socket
         );
 
-      startupIdeasWithTweets.push({
-        idea,
-        tweets: twitterResult.tweets || [],
-      });
+        startupIdeasWithTweets.push({
+          idea,
+          tweets: twitterResult.tweets || [],
+        });
 
+        if (verbose) {
+          console.log(
+            `    Found ${
+              twitterResult.tweets ? twitterResult.tweets.length : 0
+            } tweets`
+          );
+        }
+      }
+
+      // Compile results
+      const result: YouTubeToTwitterPipelineResult = {
+        videoMetadata: summaryResult.metadata || {},
+        summary: summaryResult.summary || "",
+        keyPoints: summaryResult.keyPoints || [],
+        startupIdeas,
+        startupIdeasWithTweets,
+      };
+
+      // For debugging
       if (verbose) {
+        console.log("📊 Result summary:");
         console.log(
-          `    Found ${twitterResult.tweets ? twitterResult.tweets.length : 0} tweets`
+          `  Video: ${result.videoMetadata?.title || "Unknown title"}`
+        );
+        console.log(`  Summary: ${result.summary.substring(0, 100)}...`);
+        console.log(`  Key points: ${result.keyPoints.length}`);
+        console.log(`  Startup ideas: ${result.startupIdeas.length}`);
+        console.log(
+          `  Tweets found: ${result.startupIdeasWithTweets.reduce(
+            (acc, item) => acc + (item.tweets?.length || 0),
+            0
+          )}`
         );
       }
-    }
 
-    // Compile results
-    const result: YouTubeToTwitterPipelineResult = {
-      videoMetadata: summaryResult.metadata || {},
-      summary: summaryResult.summary || "",
-      keyPoints: summaryResult.keyPoints || [],
-      startupIdeas,
-      startupIdeasWithTweets,
-    };
-    
-    // For debugging
-    if (verbose) {
-      console.log("📊 Result summary:");
-      console.log(`  Video: ${result.videoMetadata?.title || "Unknown title"}`);
-      console.log(`  Summary: ${result.summary.substring(0, 100)}...`);
-      console.log(`  Key points: ${result.keyPoints.length}`);
-      console.log(`  Startup ideas: ${result.startupIdeas.length}`);
-      console.log(`  Tweets found: ${result.startupIdeasWithTweets.reduce((acc, item) => acc + (item.tweets?.length || 0), 0)}`);
-    }
-
-    // Generate HTML report if requested
-    if (saveResults) {
-      if (verbose) console.log("📄 Generating HTML report...");
-      try {
-        const htmlContent = generateHtmlReport(result);
-        const outputPath = saveHtmlReport(htmlContent);
-        if (verbose) console.log(`📊 Report saved to: ${outputPath}`);
-      } catch (error) {
-        console.error("Error generating HTML report:", error);
-        console.error("Continuing without HTML report...");
+      // Generate HTML report if requested
+      if (saveResults) {
+        if (verbose) console.log("📄 Generating HTML report...");
+        try {
+          const htmlContent = generateHtmlReport(result);
+          const outputPath = saveHtmlReport(htmlContent);
+          if (verbose) console.log(`📊 Report saved to: ${outputPath}`);
+        } catch (error) {
+          console.error("Error generating HTML report:", error);
+          console.error("Continuing without HTML report...");
+        }
       }
-    }
 
-    return result;
+      return result;
     } finally {
       // Clean up the shared socket connection after all workflows are complete
       if (sharedSocket?.disconnect) {
-        if (verbose) console.log("🔌 Disconnecting shared socket connection...");
+        if (verbose)
+          console.log("🔌 Disconnecting shared socket connection...");
         sharedSocket.disconnect();
       }
     }

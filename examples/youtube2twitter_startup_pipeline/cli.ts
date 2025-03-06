@@ -34,6 +34,16 @@ program
     "Number of tweets to retrieve per startup idea",
     "5"
   )
+  .option(
+    "--min-likes <number>",
+    "Minimum number of likes for a tweet to be included",
+    "0"
+  )
+  .option(
+    "--min-retweets <number>",
+    "Minimum number of retweets for a tweet to be included",
+    "0"
+  )
   .option("-o, --output <path>", "Path to save the HTML report")
   .option("-v, --verbose", "Enable verbose output", false)
   .option("--no-save", "Do not save the HTML report")
@@ -69,6 +79,8 @@ program
         console.log(`  Video URL: ${videoUrl}`);
         console.log(`  Summary length: ${options.summaryLength}`);
         console.log(`  Tweets per idea: ${options.tweetsPerIdea}`);
+        console.log(`  Min likes: ${options.minLikes}`);
+        console.log(`  Min retweets: ${options.minRetweets}`);
         console.log(`  Save report: ${options.save ? "Yes" : "No"}`);
         if (options.output) {
           console.log(`  Output path: ${options.output}`);
@@ -84,6 +96,8 @@ program
         anthropicApiKey,
         summaryLength: options.summaryLength,
         tweetsPerIdea: parseInt(options.tweetsPerIdea, 10),
+        minLikes: parseInt(options.minLikes, 10),
+        minRetweets: parseInt(options.minRetweets, 10),
         saveResults: options.save,
         verbose: options.verbose,
       });
