@@ -90,7 +90,7 @@ export async function ${functionName}(
     if (isInternalSocket) {
       // Import here to avoid circular dependencies
       const { connectSocket } = await import('../socket/connect');
-      socketInstance = await connectSocket("api.pocketflow.ai", { token: authToken });
+      socketInstance = await connectSocket(process.env.POCKETFLOW_SERVER_URL || "api.pocketflow.ai", { token: authToken });
     }
 
     // Import runWorkflow
