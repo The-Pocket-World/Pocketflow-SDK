@@ -8,7 +8,7 @@
  * 4. Generate an HTML report with all the information
  */
 
-import { runYoutubeSummarizerWorkflow } from "../../src/flows/youtube-summarizer";
+import { runYoutubeSummarizerWorkflow } from "../../src/flows/youtube_summarizer";
 import { runTwitterMonitoringPostsWorkflow } from "../../src/flows/twitter";
 import * as dotenv from "dotenv";
 import { generateHtmlReport, saveHtmlReport } from "./template-utils";
@@ -140,6 +140,8 @@ export async function runYouTubeToTwitterPipeline(
           prompt: idea,
           project_description: "Startup idea from YouTube video",
           limit: tweetsPerIdea,
+          min_likes: 50,
+          min_retweets: 20,
         },
         authToken
       );
