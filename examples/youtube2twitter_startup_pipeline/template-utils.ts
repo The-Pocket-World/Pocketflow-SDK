@@ -120,6 +120,16 @@ export function generateHtmlReport(
     a:hover {
       text-decoration: underline;
     }
+    .relevance-info {
+      margin-top: 10px;
+      padding: 8px;
+      background-color: #f8f9fa;
+      border-radius: 6px;
+      font-size: 0.9em;
+    }
+    .relevance-rationale {
+      line-height: 1.4;
+    }
   </style>
 </head>
 <body>
@@ -153,6 +163,9 @@ export function generateHtmlReport(
     <div>❤️ {{likes}}</div>
   </div>
   <div><a href="{{url}}" target="_blank">View on Twitter</a></div>
+  <div class="relevance-info">
+    <div class="relevance-rationale"><strong>Relevance Rationale:</strong> {{relevanceRationale}}</div>
+  </div>
 </div>`;
 
     // Prepare data for template
@@ -169,7 +182,9 @@ export function generateHtmlReport(
     );
     result.startupIdeasWithTweets.forEach((idea, index) => {
       console.log(
-        `Idea ${index + 1}: "${idea.idea.substring(0, 40)}..." has ${idea.tweets ? idea.tweets.length : 0} tweets (${idea.tweets ? "defined" : "undefined"} tweets array)`
+        `Idea ${index + 1}: "${idea.idea.substring(0, 40)}..." has ${
+          idea.tweets ? idea.tweets.length : 0
+        } tweets (${idea.tweets ? "defined" : "undefined"} tweets array)`
       );
     });
 
@@ -213,6 +228,12 @@ export function generateHtmlReport(
               metadata.favorite_count || 0
             );
             tweetHtml = tweetHtml.replace("{{url}}", tweet.url || "#");
+            tweetHtml = tweetHtml.replace(
+              "{{relevanceRationale}}",
+              tweet.reason ||
+                tweet.relevance_rationale ||
+                "No rationale provided"
+            );
 
             return tweetHtml;
           })
@@ -225,7 +246,11 @@ export function generateHtmlReport(
         </div>
         <p>${ideaWithTweets.idea}</p>
         <h4>Related Tweets (Score ≥ 4.00)</h4>
-        ${tweetsHtml.length > 0 ? tweetsHtml : "<p>No related tweets with relevance score ≥ 4.00 found.</p>"}
+        ${
+          tweetsHtml.length > 0
+            ? tweetsHtml
+            : "<p>No related tweets with relevance score ≥ 4.00 found.</p>"
+        }
       </div>`;
       })
       .join("");
