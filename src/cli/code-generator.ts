@@ -102,7 +102,7 @@ export async function ${functionName}(
         // Setup handlers
         const handlers = {
           run_complete: (data: any) => {
-            resolve(data as ${outputInterfaceName});
+            resolve(data.state as ${outputInterfaceName});
           },
           run_error: (error: any) => {
             reject(new Error(error.message || 'Workflow execution failed'));
