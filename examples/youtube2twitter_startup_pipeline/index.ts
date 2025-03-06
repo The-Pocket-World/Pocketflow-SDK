@@ -95,56 +95,63 @@ export async function runYouTubeToTwitterPipeline(
   }
 
   try {
-    // Step 1: Summarize the YouTube video
-    if (verbose) console.log("📝 Summarizing YouTube video...");
-    const summaryResult = await runYoutubeSummarizerWorkflow(
-      {
-        videoUrl: options.videoUrl,
-        summaryLength,
-      },
-      authToken
-    );
-
-    if (verbose) {
-      console.log(`✅ Video summarized successfully`);
-      console.log(
-        `📊 Summary length: ${summaryResult.summary.length} characters`
-      );
-      console.log(`📊 Key points: ${summaryResult.keyPoints.length}`);
-    }
-
-    // Step 2: Extract startup ideas from the summary using Anthropic API
-    if (verbose) console.log("💡 Extracting startup ideas from summary...");
-    const startupIdeas = await extractStartupIdeas(
-      summaryResult.summary,
-      anthropicApiKey
-    );
-
-    if (verbose) {
-      console.log(`✅ Extracted ${startupIdeas.length} startup ideas`);
-      startupIdeas.forEach((idea, index) => {
-        console.log(`  ${index + 1}. ${idea.substring(0, 80)}...`);
-      });
-    }
-
-    // Step 3: Search Twitter for each startup idea
-    if (verbose) console.log("🔍 Searching Twitter for related content...");
-
-    const startupIdeasWithTweets: StartupIdeaWithTweets[] = [];
-
-    for (const idea of startupIdeas) {
-      if (verbose) console.log(`  Searching for: ${idea.substring(0, 40)}...`);
-
-      const twitterResult = await runTwitterMonitoringPostsWorkflow(
+    // Create a shared socket connection for all workflows
+    const { connectSocket } = await import("../../src/socket/connect");
+    const sharedSocket = await connectSocket(process.env.POCKETFLOW_SERVER_URL || "api.pocketflow.ai", { token: authToken });
+    
+    try {
+      // Step 1: Summarize the YouTube video
+      if (verbose) console.log("📝 Summarizing YouTube video...");
+      const summaryResult = await runYoutubeSummarizerWorkflow(
         {
-          prompt: idea,
-          project_description: "Startup idea from YouTube video",
-          limit: tweetsPerIdea,
-          min_likes: 50,
-          min_retweets: 20,
+          videoUrl: options.videoUrl,
+          summaryLength,
         },
-        authToken
+        authToken,
+        sharedSocket // Pass the shared socket
       );
+
+      if (verbose) {
+        console.log(`✅ Video summarized successfully`);
+        console.log(
+          `📊 Summary length: ${summaryResult.summary.length} characters`
+        );
+        console.log(`📊 Key points: ${summaryResult.keyPoints.length}`);
+      }
+
+      // Step 2: Extract startup ideas from the summary using Anthropic API
+      if (verbose) console.log("💡 Extracting startup ideas from summary...");
+      const startupIdeas = await extractStartupIdeas(
+        summaryResult.summary,
+        anthropicApiKey
+      );
+
+      if (verbose) {
+        console.log(`✅ Extracted ${startupIdeas.length} startup ideas`);
+        startupIdeas.forEach((idea, index) => {
+          console.log(`  ${index + 1}. ${idea.substring(0, 80)}...`);
+        });
+      }
+
+      // Step 3: Search Twitter for each startup idea
+      if (verbose) console.log("🔍 Searching Twitter for related content...");
+
+      const startupIdeasWithTweets: StartupIdeaWithTweets[] = [];
+
+      for (const idea of startupIdeas) {
+        if (verbose) console.log(`  Searching for: ${idea.substring(0, 40)}...`);
+
+        const twitterResult = await runTwitterMonitoringPostsWorkflow(
+          {
+            prompt: idea,
+            project_description: "Startup idea from YouTube video",
+            limit: tweetsPerIdea,
+            min_likes: 50,
+            min_retweets: 20,
+          },
+          authToken,
+          sharedSocket // Pass the shared socket
+        );
 
       startupIdeasWithTweets.push({
         idea,
@@ -160,13 +167,22 @@ export async function runYouTubeToTwitterPipeline(
 
     // Compile results
     const result: YouTubeToTwitterPipelineResult = {
-      videoMetadata: summaryResult.metadata,
-      summary: summaryResult.summary,
-      keyPoints: summaryResult.keyPoints,
+      videoMetadata: summaryResult.metadata || {},
+      summary: summaryResult.summary || "",
+      keyPoints: summaryResult.keyPoints || [],
       startupIdeas,
       startupIdeasWithTweets,
     };
-    console.log(result);
+    
+    // For debugging
+    if (verbose) {
+      console.log("📊 Result summary:");
+      console.log(`  Video: ${result.videoMetadata?.title || "Unknown title"}`);
+      console.log(`  Summary: ${result.summary.substring(0, 100)}...`);
+      console.log(`  Key points: ${result.keyPoints.length}`);
+      console.log(`  Startup ideas: ${result.startupIdeas.length}`);
+      console.log(`  Tweets found: ${result.startupIdeasWithTweets.reduce((acc, item) => acc + (item.tweets?.length || 0), 0)}`);
+    }
 
     // Generate HTML report if requested
     if (saveResults) {
@@ -182,6 +198,13 @@ export async function runYouTubeToTwitterPipeline(
     }
 
     return result;
+    } finally {
+      // Clean up the shared socket connection after all workflows are complete
+      if (sharedSocket?.disconnect) {
+        if (verbose) console.log("🔌 Disconnecting shared socket connection...");
+        sharedSocket.disconnect();
+      }
+    }
   } catch (error) {
     console.error(
       "❌ Error in YouTube to Twitter pipeline:",

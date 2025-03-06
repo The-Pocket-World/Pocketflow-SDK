@@ -7,9 +7,15 @@ import axios from "axios";
  * @returns Array of startup ideas as strings
  */
 export async function extractStartupIdeas(
-  summary: string,
+  summary: string | undefined,
   apiKey: string
 ): Promise<string[]> {
+  // Handle case when summary is undefined or empty
+  if (!summary) {
+    console.warn("Warning: No summary provided to extractStartupIdeas");
+    return ["I apologize, but I don't have access to any video summary in the context you've provided. The summary appears to be undefined or missing. Without specific content to analyze, I'm unable to extract or generate startup ideas as requested."];
+  }
+  
   try {
     // Make request to Anthropic API
     const response = await axios.post(

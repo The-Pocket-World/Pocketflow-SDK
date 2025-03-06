@@ -54,8 +54,23 @@ export const defaultSocketConnectionHandler = () => {
 
 /**
  * Default disconnection handler.
- * Simply logs the disconnection event and reason.
+ * Logs detailed information about the disconnection event and reason.
  */
 export const defaultSocketDisconnectionHandler = (reason: string) => {
   console.log("Socket disconnected:", reason);
+  
+  // Map common socket.io disconnect reasons to more helpful messages
+  const reasonExplanations: Record<string, string> = {
+    'io server disconnect': 'The server has forcefully disconnected the socket with socket.disconnect()',
+    'io client disconnect': 'The socket was manually disconnected using socket.disconnect()',
+    'ping timeout': 'The server did not send a PING within the pingInterval + pingTimeout range',
+    'transport close': 'The connection was closed (example: user has lost connection, or network was changed from WiFi to 4G)',
+    'transport error': 'The connection encountered an error (example: server was stopped or unreachable)'
+  };
+  
+  if (reasonExplanations[reason]) {
+    console.log(`Explanation: ${reasonExplanations[reason]}`);
+  }
+  
+  console.log(`Timestamp: ${new Date().toISOString()}`);
 };

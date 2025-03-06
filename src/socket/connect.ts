@@ -91,7 +91,7 @@ export const connectSocket = async (
 
   // Configure socket connection options
   const socketOptions: any = {
-    transports: ["polling"],
+    transports: ["polling", "websocket"], // Try both polling and websocket transport
     reconnection: true,
     reconnectionAttempts: 10,
     reconnectionDelay: 1000,
@@ -135,8 +135,10 @@ export const connectSocket = async (
     }
   });
 
-  // Add disconnect event handler
+  // Add disconnect event handler with enhanced logging
   socket.on("disconnect", (reason) => {
+    console.error(`Socket disconnected: ${reason}`, new Error().stack);
+    console.error(`Disconnect details - Socket ID: ${socket.id}, Connected: ${socket.connected}, URL: ${url}`);
     if (handleDisconnection) {
       handleDisconnection(reason);
     }
@@ -162,6 +164,25 @@ export const connectSocket = async (
   // Add error event handler
   socket.on("error", (error) => {
     console.error("Socket error:", error);
+  });
+
+  // Add more diagnostic event listeners
+  socket.on("connect_error", (error) => {
+    console.error("Socket connect_error:", error);
+    console.error("Connection details:", {
+      url,
+      socketId: socket.id,
+      transportOptions: socket.io?.opts?.transports,
+      auth: socketOptions.auth ? "Present" : "Missing"
+    });
+  });
+
+  socket.on("connect_timeout", (timeout) => {
+    console.error("Socket connect_timeout:", timeout);
+  });
+
+  socket.io.on("reconnect_attempt", (attemptNumber) => {
+    console.log(`Socket reconnect attempt #${attemptNumber}`);
   });
 
   // Add log event handler

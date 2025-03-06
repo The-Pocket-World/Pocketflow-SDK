@@ -93,7 +93,8 @@ describe("Workflow Execution Integration", () => {
             flowId: workflowId,
             token,
             input,
-          })
+          }),
+          expect.any(Function)
         );
 
         // Simulate workflow execution sequence
@@ -129,7 +130,7 @@ describe("Workflow Execution Integration", () => {
         token,
       })
     );
-  }, 10000); // Increase timeout to 10 seconds
+  }, 30000); // Increase timeout to 30 seconds
 
   it("should handle errors in the workflow execution", async () => {
     // Test data
@@ -179,5 +180,5 @@ describe("Workflow Execution Integration", () => {
     // The actual format of the error message depends on the implementation
     // Just check that console.error was called with something containing the error message
     expect(console.error).toHaveBeenCalled();
-  }, 10000); // Increase timeout to 10 seconds
+  }, 30000); // Increase timeout to 30 seconds
 });

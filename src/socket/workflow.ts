@@ -276,11 +276,27 @@ export const runWorkflow = (
   };
 
   try {
+    console.log("Emitting run_workflow event with payload:", {
+      flowId: payload.flowId,
+      hasInput: !!payload.input,
+      hasToken: !!payload.token,
+      socketId: socket.id,
+      socketConnected: socket.connected
+    });
+    
     // Emit the run_workflow event to start the workflow
-    // Remove the callback to match test expectations
-    socket.emit("run_workflow", payload);
+    socket.emit("run_workflow", payload, (ack: any) => {
+      // Optional acknowledgment callback, helpful for debugging
+      if (ack) {
+        console.log(`Server acknowledged workflow run request: ${JSON.stringify(ack)}`);
+      }
+    });
+    
+    // Log immediately after emission to check if socket is still connected
+    console.log(`After emitting run_workflow - Socket still connected: ${socket.connected}, ID: ${socket.id}`);
   } catch (error: any) {
     console.error(`Error emitting workflow event: ${error.message}`);
+    console.error(`Error stack: ${error.stack}`);
     if (eventHandlers.run_error) {
       (eventHandlers.run_error as any)({
         message: error.message,
