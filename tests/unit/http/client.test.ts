@@ -53,7 +53,7 @@ describe("HTTP Client API", () => {
       // Verify the fetch call
       expect(global.fetch).toHaveBeenCalledTimes(1);
       expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8080/api/workflows",
+        "http://localhost:8080/workflows",
         expect.objectContaining({
           method: "GET",
           headers: {
@@ -159,7 +159,7 @@ describe("HTTP Client API", () => {
       // Verify the fetch call
       expect(global.fetch).toHaveBeenCalledTimes(1);
       expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8080/api/workflows/wf_123456789",
+        "http://localhost:8080/workflows/wf_123456789",
         expect.objectContaining({
           method: "GET",
           headers: {

@@ -16,6 +16,7 @@
     "test:integration": "jest tests/integration",
     "prepublish": "npm run build",
     "examples:twitter": "ts-node examples/twitter/cli.ts",
+    "examples:youtube2twitter": "ts-node examples/youtube2twitter_startup_pipeline/cli.ts",
     "generate": "ts-node src/cli"
   },
   "keywords": [
