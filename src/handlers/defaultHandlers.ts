@@ -1,9 +1,13 @@
 /**
  * Default handler for workflow log messages.
- * Simply logs the data to the console.
+ * Only logs errors by default to reduce noise.
  */
 export const defaultWorkflowLogHandler = (data: any) => {
-  console.log(data);
+  // Only log errors or explicit warnings to reduce noise
+  if (data && (data.level === 'error' || data.level === 'warning' || 
+      (typeof data === 'string' && (data.includes('Error') || data.includes('error'))))) {
+    console.log(data);
+  }
 };
 
 /**
@@ -20,11 +24,12 @@ export const defaultFeedbackRequestHandler = (data: any) => {
   });
 
   return new Promise((resolve) => {
+    const defaultText = defaultValue ? ` (Default: ${defaultValue})` : "";
     readline.question(
-      `${prompt} ${defaultValue ? `(Default: ${defaultValue})` : ""}: `,
+      `${prompt}${defaultText}: `,
       (input: string) => {
         readline.close();
-        resolve(input || defaultValue);
+        resolve(input || defaultValue || "");
       }
     );
   });
@@ -32,15 +37,17 @@ export const defaultFeedbackRequestHandler = (data: any) => {
 
 /**
  * Default stream output handler.
- * Logs the stream output data with appropriate formatting.
+ * Only logs errors by default to reduce noise.
  */
 export const defaultStreamOutputHandler = (data: any) => {
-  const prefix = data.isError ? "❌ Error" : "📤 Output";
-  console.log(
-    `${prefix} from node '${data.node}' (${data.type}): ${data.action}`
-  );
-  if (data.state) {
-    console.log("State:", data.state);
+  // Only log errors to reduce noise
+  if (data.isError) {
+    console.log(
+      `❌ Error from node '${data.node}' (${data.type}): ${data.action}`
+    );
+    if (data.state) {
+      console.log("State:", data.state);
+    }
   }
 };
 
@@ -49,7 +56,7 @@ export const defaultStreamOutputHandler = (data: any) => {
  * Simply logs the connection event.
  */
 export const defaultSocketConnectionHandler = () => {
-  console.log("Socket connected successfully");
+  // Only log if there was any issue with connecting
 };
 
 /**
@@ -57,5 +64,8 @@ export const defaultSocketConnectionHandler = () => {
  * Simply logs the disconnection event and reason.
  */
 export const defaultSocketDisconnectionHandler = (reason: string) => {
-  console.log("Socket disconnected:", reason);
+  // Only log disconnection if it's unexpected or an error
+  if (reason !== "io client disconnect" && reason !== "transport close") {
+    console.log("Socket disconnected:", reason);
+  }
 };

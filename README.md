@@ -12,11 +12,12 @@ A TypeScript SDK for interacting with the PocketFlow API, enabling seamless inte
   - [📋 Table of Contents](#-table-of-contents)
   - [🚀 Installation](#-installation)
   - [⚡ Quick Start](#-quick-start)
-  - [🔑 Key Features](#-key-features)
+  - [�� Key Features](#-key-features)
   - [📖 Usage Examples](#-usage-examples)
     - [Connecting to the Socket Server](#connecting-to-the-socket-server)
     - [Running Workflows](#running-workflows)
     - [Handling Events](#handling-events)
+    - [More Advanced Usage](#more-advanced-usage)
   - [🛠️ CLI Usage](#️-cli-usage)
     - [Initialize Configuration](#initialize-configuration)
     - [Generate Workflow Types](#generate-workflow-types)
@@ -41,45 +42,83 @@ A TypeScript SDK for interacting with the PocketFlow API, enabling seamless inte
 
 ## 🚀 Installation
 
-```bash
-npm install pocketflow-sdk
-```
-
-Or with yarn:
+Clone the github repo:
 
 ```bash
-yarn add pocketflow-sdk
+git clone https://github.com/The-Pocket-World/sdk.git
 ```
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Generate the types:
+
+```bash
+npm run generate
+```
+
+That's it! You can now use the SDK in your project. Just replace "pocketflow-sdk" in the import statements with the path to the local sdk.
+
 
 ## ⚡ Quick Start
 
 ```typescript
-import { connectSocket, runWorkflow } from "pocketflow-sdk";
+import { connectSocket, runWorkflow } from "pocketflow-sdk"; // Replace with the path to the local sdk
+import dotenv from 'dotenv';
 
-// Connect to the PocketFlow API
-const socket = connectSocket("api.pocketflow.ai", {
-  token: "your_api_key_here",
-});
+// Load environment variables
+dotenv.config();
 
-// Run a workflow
-const cleanup = runWorkflow(
-  socket,
-  "your-workflow-id",
-  "your-auth-token",
-  {
-    prompt: "Analyze the market trends for AI assistants",
-    // Other input parameters specific to your workflow
-  },
-  {
-    prettyLogs: true, // Enable formatted console output
+// Get API key from environment variables
+const apiKey = process.env.POCKETFLOW_API_KEY;
+const serverUrl = process.env.POCKETFLOW_SERVER_URL || "api.pocketflow.ai";
+
+if (!apiKey) {
+  console.error("Error: POCKETFLOW_API_KEY is not set in the environment");
+  process.exit(1);
+}
+
+// Example workflow ID - replace with a valid workflow ID from your account
+const workflowId = "your-workflow-id";
+
+async function main() {
+  try {
+    // Connect to the PocketFlow API
+    const socket = await connectSocket(serverUrl, {
+      token: apiKey,
+    });
+
+    // Run a workflow
+    runWorkflow(
+      socket,
+      workflowId,
+      apiKey,
+      {
+        prompt: "Analyze the market trends for AI assistants",
+        // Other input parameters specific to your workflow
+      },
+      {
+        prettyLogs: true, // Enable formatted console output
+      }
+    );
+
+    // Allow some time for the workflow to run then disconnect
+    setTimeout(() => {
+      console.log("Disconnecting socket...");
+      socket.disconnect();
+    }, 10000); // 10 seconds timeout
+  } catch (error) {
+    console.error("Error:", error);
   }
-);
+}
 
-// When you're done, clean up event listeners
-cleanup();
+main();
 ```
 
-## 🔑 Key Features
+## �� Key Features
 
 - **Real-time Communication**: Connect to PocketFlow's socket server for real-time workflow execution and updates
 - **Event-Driven Architecture**: Subscribe to workflow events with customizable handlers
@@ -96,74 +135,125 @@ cleanup();
 
 ```typescript
 import { connectSocket } from "pocketflow-sdk";
+import dotenv from 'dotenv';
 
-// Basic connection with default options
-const socket = connectSocket();
+// Load environment variables
+dotenv.config();
 
-// Connection with custom options
-const socketWithOptions = connectSocket("api.pocketflow.ai", {
-  // Authentication token (required for most operations)
-  token: "your_token_here",
+async function main() {
+  try {
+    // Basic connection with default options
+    const basicSocket = await connectSocket();
+    
+    // Connection with custom options
+    const socketWithOptions = await connectSocket(
+      process.env.POCKETFLOW_SERVER_URL || "api.pocketflow.ai", 
+      {
+        // Authentication token (required for most operations)
+        token: process.env.POCKETFLOW_API_KEY,
+    
+        // Custom event handlers
+        handleLog: (data) => console.log("Workflow log:", data),
+        handleFeedback: (data) => prompt(data.prompt),
+        handleConnection: () => console.log("Socket connected!"),
+        handleDisconnection: (reason) => console.log("Socket disconnected:", reason),
+    
+        // Custom handlers for specific server events
+        eventHandlers: {
+          run_start: (data) => console.log("Workflow started:", data.message),
+          run_complete: (data) => console.log("Workflow completed:", data.message),
+        },
+      }
+    );
+    
+    // Clean up connections when done
+    setTimeout(() => {
+      basicSocket.disconnect();
+      socketWithOptions.disconnect();
+    }, 5000);
+  } catch (error) {
+    console.error("Error:", error);
+  }
+}
 
-  // Custom event handlers
-  handleLog: (data) => console.log("Workflow log:", data),
-  handleFeedback: (data) => prompt(data.prompt),
-  handleConnection: () => console.log("Socket connected!"),
-  handleDisconnection: (reason) => console.log("Socket disconnected:", reason),
-
-  // Custom handlers for specific server events
-  eventHandlers: {
-    run_start: (data) => console.log("Workflow started:", data.message),
-    run_complete: (data) => console.log("Workflow completed:", data.message),
-  },
-});
+main();
 ```
 
 ### Running Workflows
 
 ```typescript
 import { connectSocket, runWorkflow } from "pocketflow-sdk";
+import dotenv from 'dotenv';
 
-// Connect to the socket server
-const socket = connectSocket("api.pocketflow.ai", {
-  token: "your_token_here",
-});
+// Load environment variables
+dotenv.config();
 
-// Run a workflow with basic options
-const cleanup = runWorkflow(socket, "your-workflow-id", "your-auth-token", {
-  prompt: "Your workflow input prompt",
-  // Other input parameters specific to your workflow
-});
+// Get API key from environment variables
+const apiKey = process.env.POCKETFLOW_API_KEY;
+const serverUrl = process.env.POCKETFLOW_SERVER_URL || "api.pocketflow.ai";
 
-// Run a workflow with advanced options
-const cleanupAdvanced = runWorkflow(
-  socket,
-  "your-workflow-id",
-  "your-auth-token",
-  { prompt: "Your workflow input prompt" },
-  {
-    // Enable pretty-printed logs
-    prettyLogs: true,
+if (!apiKey) {
+  console.error("Error: POCKETFLOW_API_KEY is not set in the environment");
+  process.exit(1);
+}
 
-    // Enable verbose logging
-    verbose: true,
+// Example workflow ID - replace with a valid workflow ID from your account
+const workflowId = "your-workflow-id";
 
-    // Custom event handlers
-    handlers: {
-      run_complete: (data) => {
-        console.log("Workflow completed successfully!");
-        console.log("Result:", data.state);
-      },
-      final_output: (data) => {
-        console.log("Final output:", data.data);
-      },
-    },
+async function main() {
+  try {
+    // Connect to the socket server
+    const socket = await connectSocket(serverUrl, {
+      token: apiKey,
+    });
+
+    // Run a workflow with basic options
+    runWorkflow(
+      socket,
+      workflowId,
+      apiKey,
+      {
+        prompt: "Your workflow input prompt",
+        // Other input parameters specific to your workflow
+      }
+    );
+
+    // Run a workflow with advanced options
+    runWorkflow(
+      socket,
+      workflowId,
+      apiKey,
+      { prompt: "Your workflow input prompt" },
+      {
+        // Enable pretty-printed logs
+        prettyLogs: true,
+
+        // Enable verbose logging
+        verbose: true,
+
+        // Custom event handlers
+        handlers: {
+          run_complete: (data) => {
+            console.log("Workflow completed successfully!");
+            console.log("Result:", data.state);
+          },
+          final_output: (data) => {
+            console.log("Final output:", data.data);
+          },
+        },
+      }
+    );
+
+    // Clean up when done
+    setTimeout(() => {
+      socket.disconnect();
+    }, 10000);
+  } catch (error) {
+    console.error("Error:", error);
   }
-);
+}
 
-// Clean up event listeners when done
-cleanup();
-cleanupAdvanced();
+main();
 ```
 
 ### Handling Events
@@ -172,37 +262,89 @@ The SDK supports all events emitted by the PocketFlow server:
 
 ```typescript
 import { connectSocket, runWorkflow } from "pocketflow-sdk";
+import { ServerEmittedEvents } from "pocketflow-sdk/dist/socket/workflow"; // Import event types
+import dotenv from 'dotenv';
 
-// Connect to the socket server
-const socket = connectSocket("api.pocketflow.ai", {
-  token: "your_token_here",
-});
+// Load environment variables
+dotenv.config();
 
-// Custom event handlers
-const customHandlers = {
-  // Workflow execution events
-  run_start: (data) => console.log("Workflow started:", data.message),
-  run_complete: (data) => console.log("Workflow completed:", data.message),
-  run_error: (data) => console.error("Workflow error:", data.message),
-  run_warning: (data) => console.warn("Workflow warning:", data.message),
+// Get API key from environment variables
+const apiKey = process.env.POCKETFLOW_API_KEY;
+const serverUrl = process.env.POCKETFLOW_SERVER_URL || "api.pocketflow.ai";
 
-  // Stream and node events
-  stream_output: (data) =>
-    console.log(`Output from node ${data.node}:`, data.action),
-  node_error: (data) =>
-    console.error(`Error in node ${data.node}:`, data.error),
-  final_output: (data) => console.log("Final output:", data.data),
-};
+if (!apiKey) {
+  console.error("Error: POCKETFLOW_API_KEY is not set in the environment");
+  process.exit(1);
+}
 
-// Run workflow with custom handlers
-const cleanup = runWorkflow(
-  socket,
-  "your-workflow-id",
-  "your-auth-token",
-  { prompt: "Your workflow input prompt" },
-  { handlers: customHandlers }
-);
+// Example workflow ID - replace with a valid workflow ID from your account
+const workflowId = "your-workflow-id";
+
+async function main() {
+  try {
+    // Connect to the socket server
+    const socket = await connectSocket(serverUrl, {
+      token: apiKey,
+    });
+
+    // Custom event handlers
+    const customHandlers = {
+      // Workflow execution events
+      run_start: (data: ServerEmittedEvents["run_start"]) => 
+        console.log("Workflow started:", data.message),
+      run_complete: (data: ServerEmittedEvents["run_complete"]) => 
+        console.log("Workflow completed:", data.message),
+      run_error: (data: ServerEmittedEvents["run_error"]) => 
+        console.error("Workflow error:", data.message),
+      run_warning: (data: ServerEmittedEvents["run_warning"]) => 
+        console.warn("Workflow warning:", data.message),
+
+      // Stream and node events
+      stream_output: (data: ServerEmittedEvents["stream_output"]) =>
+        console.log(`Output from node ${data.node}:`, data.action),
+      node_error: (data: ServerEmittedEvents["node_error"]) =>
+        console.error(`Error in node ${data.node}:`, data.error),
+      final_output: (data: ServerEmittedEvents["final_output"]) => 
+        console.log("Final output:", data.data),
+    };
+
+    // Run workflow with custom handlers
+    runWorkflow(
+      socket,
+      workflowId,
+      apiKey,
+      { prompt: "Your workflow input prompt" },
+      { handlers: customHandlers }
+    );
+
+    // Clean up when done
+    setTimeout(() => {
+      socket.disconnect();
+    }, 10000);
+  } catch (error) {
+    console.error("Error:", error);
+  }
+}
+
+main();
 ```
+
+### More Advanced Usage
+
+Refer to the [examples](./examples) directory for more advanced usage examples. You can also run the examples with the interactive CLI interface:
+
+```bash
+npm run examples:twitter
+```
+
+to run the twitter example (advanced twitter search tool) and 
+
+```bash
+npm run examples:youtube2twitter
+```
+
+for the youtube2twitter example (identifies startup ideas in a youtube video and searches twitter for related posts).
+
 
 ## 🛠️ CLI Usage
 

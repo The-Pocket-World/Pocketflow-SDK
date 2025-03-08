@@ -13,9 +13,15 @@ import {
 import * as dotenv from "dotenv";
 import { connectSocket } from "../../src/socket/connect";
 import { generateHtmlReport, saveHtmlReport } from "./template-utils";
+import { Socket } from "socket.io-client";
 
 // Load environment variables
 dotenv.config();
+
+// Extended output type for internal use that includes the socket
+interface ExtendedTwitterOutput extends TwitterMonitoringPostsWorkflowOutput {
+  socket?: Socket;
+}
 
 /**
  * Configuration options for the Twitter analysis
@@ -39,9 +45,9 @@ export interface TwitterAnalysisOptions {
  */
 export async function runTwitterAnalysis(
   options: TwitterAnalysisOptions
-): Promise<TwitterMonitoringPostsWorkflowOutput> {
+): Promise<ExtendedTwitterOutput> {
   let socket: any = null;
-  const authToken = options.authToken || process.env.POCKETFLOW_AUTH_TOKEN;
+  const authToken = options.authToken || process.env.POCKETFLOW_API_KEY;
   const saveResults =
     options.saveResults !== undefined ? options.saveResults : true;
   const verbose = options.verbose !== undefined ? options.verbose : false;
@@ -69,7 +75,7 @@ export async function runTwitterAnalysis(
     // Ensure we have an auth token
     if (!authToken) {
       throw new Error(
-        "Authentication token is required in options or POCKETFLOW_AUTH_TOKEN environment variable"
+        "Authentication token is required in options or POCKETFLOW_API_KEY environment variable"
       );
     }
 
@@ -79,6 +85,8 @@ export async function runTwitterAnalysis(
       project_description:
         "A coding assistant that helps developers write better code",
       limit: 10,
+      min_likes: 0,
+      min_retweets: 0,
       ...(options.input || {}),
     };
 
@@ -111,7 +119,7 @@ export async function runTwitterAnalysis(
     }
 
     // Create a promise to handle the workflow execution
-    return new Promise<TwitterMonitoringPostsWorkflowOutput>(
+    return new Promise<ExtendedTwitterOutput>(
       (resolve, reject) => {
         // Set a flag to track if the workflow has completed
         let isCompleted = false;
@@ -343,7 +351,7 @@ async function main() {
 
     // Run the analysis with a timeout
     console.log("Running Twitter analysis with timeout...");
-    const result = await Promise.race<TwitterMonitoringPostsWorkflowOutput>([
+    const result = await Promise.race<ExtendedTwitterOutput>([
       runTwitterAnalysis({
         authToken: apiKey,
         saveResults: true,

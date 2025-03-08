@@ -105,6 +105,51 @@ export const defaultHandlers: EventHandlers = {
 };
 
 /**
+ * Quiet handlers that minimize logging for non-critical events
+ */
+export const quietHandlers: EventHandlers = {
+  // Generation related events
+  generation_error: (data) =>
+    console.error(`Generation Error: ${data.message}`),
+  generation_update: () => {}, // No-op 
+  generation_complete: () => {}, // No-op
+
+  // Workflow execution related events - only log errors and completion
+  run_error: (data) => {
+    console.error(`❌ Workflow Error: ${data.message}`);
+  },
+  run_warning: (data) => {
+    // Only log warnings if they're serious enough to affect the result
+    if (data.errors && data.errors.length > 0) {
+      console.warn(`⚠️ Workflow Warning: ${data.message}`);
+    }
+  },
+  run_complete: (data) => {
+    if (data.warning || (data.errors && data.errors.length > 0)) {
+      console.warn(`⚠️ Workflow Completed with warnings`);
+    } else {
+      console.log(`✅ Workflow Completed`);
+    }
+  },
+  run_start: () => {}, // No logging for workflow start
+
+  // No logging for stream outputs and node events unless it's an error
+  stream_output: (data) => {
+    if (data.isError) {
+      console.error(`❌ Error from node '${data.node}': ${data.action}`);
+    }
+  },
+  node_error: (data) => {
+    console.error(`❌ Error in node '${data.node}'`);
+  },
+  final_output: () => {}, // No logging for final output
+  workflow_received: () => {}, // No logging for workflow received
+  workflow_error: (data: any) => {
+    console.error(`❌ Workflow Error: ${data.message || "Unknown error"}`);
+  },
+};
+
+/**
  * Pretty logging handlers that format the output in a more readable way
  */
 export const prettyLogHandlers: EventHandlers = {
@@ -210,7 +255,7 @@ export interface WorkflowRunnerOptions {
 
   /**
    * Whether to log the workflow execution details
-   * @default true
+   * @default false
    */
   verbose?: boolean;
 }
@@ -249,12 +294,14 @@ export const runWorkflow = (
   }
 
   // Set up the options with defaults
-  const { handlers = {}, prettyLogs = false, verbose = true } = options;
+  const { handlers = {}, prettyLogs = false, verbose = false } = options;
 
-  // Combine default handlers with any custom handlers provided
+  // Combine appropriate handlers with any custom handlers provided
   const eventHandlers: EventHandlers = prettyLogs
     ? { ...prettyLogHandlers, ...handlers }
-    : { ...defaultHandlers, ...handlers };
+    : verbose
+      ? { ...defaultHandlers, ...handlers }
+      : { ...quietHandlers, ...handlers };
 
   // Remove existing listeners for events with custom handlers
   Object.keys(handlers).forEach((event) => {
