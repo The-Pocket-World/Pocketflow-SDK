@@ -330,10 +330,8 @@ async function apiRequest<T>(
     // Make sure we have a valid URL by ensuring endpoint starts with /
     const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
 
-    const apiPrefix = "/api";
-
     // Construct the full URL with the appropriate prefix
-    const url = buildUrlWithParams(`${apiPrefix}${path}`, params);
+    const url = buildUrlWithParams(`${path}`, params);
 
     // Always log the request URL for debugging
     console.log(`API Request: ${method} ${url}`);

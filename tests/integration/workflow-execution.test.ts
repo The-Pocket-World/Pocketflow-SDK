@@ -100,7 +100,8 @@ describe("Workflow Execution Integration", () => {
             flowId: workflowId,
             token,
             input,
-          })
+          }),
+          expect.any(Function)
         );
 
         // Manually emit events to simulate server responses

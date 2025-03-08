@@ -71,7 +71,7 @@ outputs:
 steps:
   - name: FetchData
     type: api_call
-    path: /api/fetch
+    path: /fetch
     expects:
       - query: string
       - limit: number

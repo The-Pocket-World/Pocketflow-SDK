@@ -51,7 +51,8 @@ describe("Workflow Module", () => {
           flowId: workflowId,
           token: token,
           input: input,
-        })
+        }),
+        expect.any(Function)
       );
     });
 

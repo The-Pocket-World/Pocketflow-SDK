@@ -364,27 +364,45 @@ export const runWorkflow = (
       }
     });
 
+    // Create payload for workflow run
+    const payload = {
+      flowId: workflowId,
+      token: authToken,
+      input: input || {},
+    };
+    
+    // Log what we're about to do
+    console.log("Emitting run_workflow event with payload:", {
+      flowId: payload.flowId,
+      hasInput: !!payload.input,
+      hasToken: !!payload.token,
+      socketId: socket.id,
+      socketConnected: socket.connected
+    });
+    
     // Emit run_workflow event to start the workflow
-    try {
-      socket.emit("run_workflow", {
-        flowId: workflowId,
-        token: authToken,
-        input: input || {},
+    socket.emit("run_workflow", payload, (ack: any) => {
+      // Optional acknowledgment callback, helpful for debugging
+      if (ack) {
+        console.log(`Server acknowledged workflow run request: ${JSON.stringify(ack)}`);
+      }
+    });
+    
+    // Log immediately after emission to check if socket is still connected
+    console.log(`After emitting run_workflow - Socket still connected: ${socket.connected}, ID: ${socket.id}`);
+  } catch (error: any) {
+    console.error(`Error emitting workflow event: ${error.message}`);
+    console.error(`Error stack: ${error.stack}`);
+    if (handlers.run_error) {
+      (handlers.run_error as any)({
+        message: error.message,
+        stack: error.stack,
       });
-    } catch (error) {
-      console.error("Failed to emit run_workflow event:", error);
+    } else {
       throw new WorkflowError(
         "Failed to start workflow execution", 
         error instanceof Error ? error : undefined
       );
     }
-  } catch (error) {
-    if (error instanceof WorkflowError) {
-      throw error;
-    }
-    throw new WorkflowError(
-      "Failed to run workflow", 
-      error instanceof Error ? error : undefined
-    );
   }
 };

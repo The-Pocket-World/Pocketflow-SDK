@@ -1,5 +1,6 @@
 src/flows/
 test-examples/
+*.html
 
 # Logs
 logs
