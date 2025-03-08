@@ -18,12 +18,8 @@ A TypeScript SDK for interacting with the PocketFlow API, enabling seamless inte
     - [Running Workflows](#running-workflows)
     - [Handling Events](#handling-events)
     - [More Advanced Usage](#more-advanced-usage)
-  - [🛠️ CLI Usage](#️-cli-usage)
-    - [Initialize Configuration](#initialize-configuration)
-    - [Generate Workflow Types](#generate-workflow-types)
-    - [Authentication Options](#authentication-options)
+    - [Authentication](#authentication)
     - [Using Generated Functions](#using-generated-functions)
-    - [CLI Command Options](#cli-command-options)
   - [📚 API Reference](#-api-reference)
     - [`connectSocket`](#connectsocket)
     - [`runWorkflow`](#runworkflow)
@@ -31,12 +27,6 @@ A TypeScript SDK for interacting with the PocketFlow API, enabling seamless inte
     - [HTTP API Functions](#http-api-functions)
   - [🧪 Examples](#-examples)
     - [Environment Setup](#environment-setup)
-    - [Twitter Analysis Example](#twitter-analysis-example)
-      - [Running the Example](#running-the-example)
-      - [Interactive CLI](#interactive-cli)
-      - [Programmatic Usage](#programmatic-usage)
-  - [🔐 Authentication](#-authentication)
-  - [🛠️ Development](#️-development)
   - [👥 Contributing](#-contributing)
   - [📄 License](#-license)
 
@@ -346,77 +336,14 @@ npm run examples:youtube2twitter
 for the youtube2twitter example (identifies startup ideas in a youtube video and searches twitter for related posts).
 
 
-## 🛠️ CLI Usage
+### Authentication
 
-The PocketFlow CLI allows you to generate type-safe TypeScript wrappers for your workflows.
+Set the POCKETFLOW_API_KEY environment variable in your `.env` file for the SDK to authenticate:
 
-### Initialize Configuration
-
-Create a default configuration file in your project:
-
-```bash
-npx pocketflow init
+```.env
+POCKETFLOW_API_KEY=pfl_your_api_key
+POCKETFLOW_SERVER_URL=https://api.pocketflow.app
 ```
-
-This will create a `.pocketflowrc.json` file in your project root with the following structure:
-
-```json
-{
-  "auth": {
-    "apiKey": "pfl_your_api_key"
-  },
-  "outDir": "src/flows",
-  "verbose": false
-}
-```
-
-### Generate Workflow Types
-
-Generate TypeScript types for your workflows:
-
-```bash
-npx pocketflow generate
-```
-
-This will:
-
-1. Fetch all workflows from your account
-2. Generate TypeScript interfaces for input/output types
-3. Create type-safe wrapper functions
-4. Save them in the specified output directory (default: `src/flows`)
-
-### Authentication Options
-
-You have several options for providing your API key:
-
-1. **Command line argument**:
-
-   ```bash
-   npx pocketflow generate -k pfl_your_api_key
-   ```
-
-2. **Configuration file** (`.pocketflowrc.json`):
-
-   ```json
-   {
-     "auth": {
-       "apiKey": "pfl_your_api_key"
-     }
-   }
-   ```
-
-3. **Environment variable**:
-
-   ```bash
-   export POCKETFLOW_API_KEY=pfl_your_api_key
-   npx pocketflow generate
-   ```
-
-4. **Environment file** (`.env`):
-   ```
-   POCKETFLOW_API_KEY=pfl_your_api_key
-   POCKETFLOW_SERVER_URL=https://api.pocketflow.app
-   ```
 
 ### Using Generated Functions
 
@@ -434,15 +361,6 @@ async function monitorTwitter() {
   console.log(`Found ${result.results.length} tweets`);
 }
 ```
-
-### CLI Command Options
-
-Available options:
-
-- `-k, --api-key <key>`: PocketFlow API key
-- `-t, --token <token>`: JWT token (alternative to API key)
-- `-o, --out-dir <dir>`: Output directory (default: `src/flows`)
-- `-v, --verbose`: Enable verbose output
 
 ## 📚 API Reference
 
@@ -559,111 +477,6 @@ The SDK includes example implementations that demonstrate how to use it with rea
    ```
    POCKETFLOW_API_KEY=your_api_key_here
    POCKETFLOW_SERVER_URL=https://api.pocketflow.ai
-   ```
-
-### Twitter Analysis Example
-
-The SDK includes a Twitter analysis example that demonstrates how to use the generated statically typed implementation.
-
-#### Running the Example
-
-```bash
-npm run examples:twitter
-```
-
-This example uses the generated TypeScript interfaces and functions from the `src/flows` directory, providing full type safety and autocompletion in your IDE. The statically typed implementation offers several benefits:
-
-1. **Type Safety**: Full TypeScript type checking for inputs and outputs
-2. **Autocomplete**: IDE suggestions for available properties and methods
-3. **Documentation**: Inline documentation through JSDoc comments
-4. **Error Prevention**: Compile-time checks to prevent runtime errors
-5. **Refactoring Support**: Better tooling for code refactoring
-
-#### Interactive CLI
-
-You can also run the example with the interactive CLI interface:
-
-```bash
-npm run examples:twitter:cli
-```
-
-The CLI interface supports command-line arguments:
-
-```bash
-# Run with specific parameters
-npm run examples:twitter:cli -- --token=your_api_key --prompt="AI assistants" --project="A coding assistant" --limit=10
-
-# Show help
-npm run examples:twitter:cli -- --help
-```
-
-#### Programmatic Usage
-
-```typescript
-import { runTwitterAnalysis } from "pocketflow-sdk/examples/twitter";
-
-// Run with environment variables
-runTwitterAnalysis();
-
-// Or provide values directly
-runTwitterAnalysis({
-  authToken: "your_api_key_here",
-  input: {
-    prompt: "AI assistants for developers",
-    project_description: "A coding assistant",
-    limit: 10,
-  },
-});
-```
-
-## 🔐 Authentication
-
-The SDK requires an authentication token for connecting to the PocketFlow API. You can obtain a token from the [PocketFlow Dashboard](https://app.pocketflow.ai).
-
-Authentication can be provided in multiple ways:
-
-1. **Direct token in code**:
-
-   ```typescript
-   const socket = connectSocket("api.pocketflow.ai", {
-     token: "your_api_key_here",
-   });
-   ```
-
-2. **Environment variables**:
-
-   ```
-   POCKETFLOW_API_KEY=your_api_key_here
-   ```
-
-3. **Configuration file** (for CLI operations)
-
-## 🛠️ Development
-
-To set up the SDK for development:
-
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/pocketflow/sdk.git
-   cd sdk
-   ```
-
-2. Install dependencies:
-
-   ```bash
-   npm install
-   ```
-
-3. Build the SDK:
-
-   ```bash
-   npm run build
-   ```
-
-4. Run tests:
-   ```bash
-   npm test
    ```
 
 ## 👥 Contributing

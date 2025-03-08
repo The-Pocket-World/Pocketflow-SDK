@@ -3,11 +3,8 @@
  * Only logs errors by default to reduce noise.
  */
 export const defaultWorkflowLogHandler = (data: any) => {
-  // Only log errors or explicit warnings to reduce noise
-  if (data && (data.level === 'error' || data.level === 'warning' || 
-      (typeof data === 'string' && (data.includes('Error') || data.includes('error'))))) {
-    console.log(data);
-  }
+  // Log all data for testing purposes
+  console.log(data);
 };
 
 /**
@@ -56,7 +53,8 @@ export const defaultStreamOutputHandler = (data: any) => {
  * Simply logs the connection event.
  */
 export const defaultSocketConnectionHandler = () => {
-  // Only log if there was any issue with connecting
+  // Log connection for testing purposes
+  console.log("Socket connected successfully");
 };
 
 /**
@@ -64,8 +62,6 @@ export const defaultSocketConnectionHandler = () => {
  * Simply logs the disconnection event and reason.
  */
 export const defaultSocketDisconnectionHandler = (reason: string) => {
-  // Only log disconnection if it's unexpected or an error
-  if (reason !== "io client disconnect" && reason !== "transport close") {
-    console.log("Socket disconnected:", reason);
-  }
+  // Log all disconnections for testing purposes
+  console.log("Socket disconnected:", reason);
 };

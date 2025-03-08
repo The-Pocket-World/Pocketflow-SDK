@@ -1,6 +1,19 @@
 import { Socket } from "socket.io-client";
 
 /**
+ * Error thrown when a workflow operation fails
+ */
+export class WorkflowError extends Error {
+  constructor(message: string, public readonly cause?: Error) {
+    super(message);
+    this.name = "WorkflowError";
+    
+    // Maintain the prototype chain for instanceof checks
+    Object.setPrototypeOf(this, WorkflowError.prototype);
+  }
+}
+
+/**
  * Interface for all events emitted by the server to clients
  */
 export interface ServerEmittedEvents {
@@ -261,12 +274,13 @@ export interface WorkflowRunnerOptions {
 }
 
 /**
- * Run a workflow with the specified ID and input.
- * @param socket The socket instance to use for communication with the server.
+ * Runs a workflow with the given ID, auth token, and input.
+ * @param socket The socket connection to use.
  * @param workflowId The ID of the workflow to run.
- * @param authToken The authentication token to use for the workflow.
- * @param input The input parameters for the workflow.
+ * @param authToken The authentication token to use.
+ * @param input The input to provide to the workflow.
  * @param options Options for customizing the workflow execution.
+ * @throws {WorkflowError} If workflow configuration is invalid
  */
 export const runWorkflow = (
   socket: Socket,
@@ -275,64 +289,102 @@ export const runWorkflow = (
   input: any,
   options: WorkflowRunnerOptions = {}
 ): void => {
-  // Check if socket is connected
+  // Validate required parameters
   if (!socket) {
-    throw new Error("Socket is null or undefined");
+    throw new WorkflowError("Socket connection is required to run a workflow");
+  }
+  
+  if (!workflowId) {
+    throw new WorkflowError("Workflow ID is required");
+  }
+  
+  if (!authToken) {
+    throw new WorkflowError("Authentication token is required");
   }
 
-  if (typeof socket.connected === "boolean") {
-    if (!socket.connected) {
-      console.log("Socket not connected, attempting to reconnect...");
-      try {
-        // Attempt to reconnect the socket
-        socket.connect();
-      } catch (error) {
-        console.error("Failed to reconnect socket:", error);
-        throw new Error("Failed to reconnect socket");
-      }
-    }
-  }
-
-  // Set up the options with defaults
   const { handlers = {}, prettyLogs = false, verbose = false } = options;
 
-  // Combine appropriate handlers with any custom handlers provided
-  const eventHandlers: EventHandlers = prettyLogs
-    ? { ...prettyLogHandlers, ...handlers }
-    : verbose
-      ? { ...defaultHandlers, ...handlers }
-      : { ...quietHandlers, ...handlers };
-
-  // Remove existing listeners for events with custom handlers
-  Object.keys(handlers).forEach((event) => {
-    socket.removeAllListeners(event);
-  });
-
-  // Register all event handlers
-  Object.entries(eventHandlers).forEach(([event, handler]) => {
-    if (handler) {
-      socket.on(event, handler as any);
-    }
-  });
-
-  // Define the workflow event payload
-  const payload = {
-    flowId: workflowId,
-    input,
-    token: authToken,
-  };
+  // Get the appropriate base handlers
+  let baseHandlers: EventHandlers;
+  if (prettyLogs) {
+    baseHandlers = prettyLogHandlers;
+  } else if (verbose) {
+    baseHandlers = defaultHandlers;
+  } else {
+    baseHandlers = quietHandlers;
+  }
 
   try {
-    // Emit the run_workflow event to start the workflow
-    // Remove the callback to match test expectations
-    socket.emit("run_workflow", payload);
-  } catch (error: any) {
-    console.error(`Error emitting workflow event: ${error.message}`);
-    if (eventHandlers.run_error) {
-      (eventHandlers.run_error as any)({
-        message: error.message,
-        stack: error.stack,
+    // Merge default and custom handlers
+    // For each event type, remove any existing listeners and register the new one
+    const eventTypes = Object.keys(baseHandlers) as (keyof ServerEmittedEvents)[];
+    
+    // Register merged handlers for each event type
+    eventTypes.forEach((eventType) => {
+      const handler = handlers[eventType] || baseHandlers[eventType];
+      
+      if (handler) {
+        try {
+          // Remove any existing listener
+          socket.removeAllListeners(eventType);
+          
+          // Add new listener
+          socket.on(eventType, (data: any) => {
+            try {
+              handler(data);
+            } catch (error) {
+              console.error(`Error in ${eventType} handler:`, error);
+            }
+          });
+        } catch (error) {
+          console.error(`Failed to register handler for '${eventType}':`, error);
+        }
+      }
+    });
+
+    // Add event handlers for any custom handlers not in the default set
+    Object.entries(handlers).forEach(([eventType, handler]) => {
+      const eventName = eventType as keyof ServerEmittedEvents;
+      if (!eventTypes.includes(eventName) && handler) {
+        try {
+          // Remove any existing listener
+          socket.removeAllListeners(eventName);
+          
+          // Add new listener with error handling
+          socket.on(eventName, (data: any) => {
+            try {
+              handler(data);
+            } catch (error) {
+              console.error(`Error in ${eventName} handler:`, error);
+            }
+          });
+        } catch (error) {
+          console.error(`Failed to register handler for custom event '${eventName}':`, error);
+        }
+      }
+    });
+
+    // Emit run_workflow event to start the workflow
+    try {
+      socket.emit("run_workflow", {
+        flowId: workflowId,
+        token: authToken,
+        input: input || {},
       });
+    } catch (error) {
+      console.error("Failed to emit run_workflow event:", error);
+      throw new WorkflowError(
+        "Failed to start workflow execution", 
+        error instanceof Error ? error : undefined
+      );
     }
+  } catch (error) {
+    if (error instanceof WorkflowError) {
+      throw error;
+    }
+    throw new WorkflowError(
+      "Failed to run workflow", 
+      error instanceof Error ? error : undefined
+    );
   }
 };

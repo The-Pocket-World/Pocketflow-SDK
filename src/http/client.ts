@@ -19,6 +19,58 @@ const BASE_URL = SERVER_URL.endsWith("/")
 console.log(`PocketFlow SDK using API endpoint: ${BASE_URL}`);
 
 /**
+ * Base error class for API errors
+ */
+export class ApiError extends Error {
+  constructor(message: string, public readonly cause?: Error) {
+    super(message);
+    this.name = "ApiError";
+
+    // Maintain the prototype chain for instanceof checks
+    Object.setPrototypeOf(this, ApiError.prototype);
+  }
+}
+
+/**
+ * Custom error class for 404 Not Found responses
+ */
+export class NotFoundError extends ApiError {
+  constructor(message: string, public readonly cause?: Error) {
+    super(message, cause);
+    this.name = "NotFoundError";
+
+    // Maintain the prototype chain for instanceof checks
+    Object.setPrototypeOf(this, NotFoundError.prototype);
+  }
+}
+
+/**
+ * Custom error class for authentication errors
+ */
+export class AuthenticationError extends ApiError {
+  constructor(message: string, public readonly cause?: Error) {
+    super(message, cause);
+    this.name = "AuthenticationError";
+
+    // Maintain the prototype chain for instanceof checks
+    Object.setPrototypeOf(this, AuthenticationError.prototype);
+  }
+}
+
+/**
+ * Custom error class for network issues
+ */
+export class NetworkError extends ApiError {
+  constructor(message: string, public readonly cause?: Error) {
+    super(message, cause);
+    this.name = "NetworkError";
+
+    // Maintain the prototype chain for instanceof checks
+    Object.setPrototypeOf(this, NetworkError.prototype);
+  }
+}
+
+/**
  * Interface for API authentication options
  */
 export interface ApiAuth {
@@ -31,6 +83,11 @@ export interface ApiAuth {
    * Whether to enable verbose logging
    */
   verbose?: boolean;
+
+  /**
+   * Request timeout in milliseconds (default: 30000ms = 30 seconds)
+   */
+  timeout?: number;
 }
 
 /**
@@ -207,16 +264,6 @@ export interface ApiErrorResponse {
 }
 
 /**
- * Custom error class for 404 Not Found responses
- */
-export class NotFoundError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "NotFoundError";
-  }
-}
-
-/**
  * Helper function to build authentication headers
  */
 const buildAuthHeaders = (auth: ApiAuth): Record<string, string> => {
@@ -227,7 +274,9 @@ const buildAuthHeaders = (auth: ApiAuth): Record<string, string> => {
   if (auth.apiKey) {
     headers["X-API-Key"] = auth.apiKey;
   } else {
-    throw new Error("Authentication required: Please provide an API key");
+    throw new AuthenticationError(
+      "Authentication required: Please provide an API key"
+    );
   }
 
   return headers;
@@ -246,7 +295,15 @@ const buildUrlWithParams = (
   // Make sure we have a valid URL by ensuring endpoint starts with /
   const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
 
-  const url = new URL(`${baseUrl}${path}`);
+  let url;
+  try {
+    url = new URL(`${baseUrl}${path}`);
+  } catch (error) {
+    throw new ApiError(
+      `Invalid URL: ${baseUrl}${path}`,
+      error instanceof Error ? error : undefined
+    );
+  }
 
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
@@ -288,96 +345,134 @@ async function apiRequest<T>(
       }
     }
 
-    const response = await fetch(url, {
-      method,
-      headers: buildAuthHeaders(auth),
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    // Create AbortController for request timeout if specified
+    const timeout = auth.timeout || 30000; // Default to 30 seconds
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-    // Log response status and headers for debugging
-    console.log(`Response Status: ${response.status} ${response.statusText}`);
-
-    if (auth.verbose) {
-      const responseHeaders: Record<string, string> = {};
-      response.headers.forEach((value, key) => {
-        responseHeaders[key] = value;
-      });
-      console.log(
-        "Response Headers:",
-        JSON.stringify(responseHeaders, null, 2)
-      );
-    }
-
-    // First get the response as text
-    const responseText = await response.text();
-
-    // Special handling for 404 responses
-    if (response.status === 404) {
-      if (auth.verbose) {
-        console.log(`Resource not found: ${url}`);
-      } else {
-        // Always log 404 errors even in non-verbose mode
-        console.error(`Resource not found: ${url}`);
-        console.error(`Response body: ${responseText}`);
-      }
-      throw new NotFoundError(`Resource not found: ${endpoint}`);
-    }
-
-    // Try to parse as JSON
-    let data;
     try {
-      data = JSON.parse(responseText);
-    } catch (parseError: any) {
-      console.error("Failed to parse server response as JSON:");
-      console.error("----- Response Body Start -----");
-      console.error(responseText);
-      console.error("----- Response Body End -----");
+      const response = await fetch(url, {
+        method,
+        headers: buildAuthHeaders(auth),
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
 
-      throw new Error(
-        `Invalid response format: ${parseError.message}. Check server configuration and API endpoints.`
-      );
-    }
+      // Clear the timeout
+      clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      // Handle API error responses
-      console.error("API Error Response:", JSON.stringify(data, null, 2));
+      // Log response status and headers for debugging
+      console.log(`Response Status: ${response.status} ${response.statusText}`);
 
-      // Special handling for workflow fetch errors (both 404 and 500 with specific message)
-      if (data && data.error === "Failed to fetch workflow") {
-        const errorMsg = `Failed to fetch workflow at ${url}, treating as not found.`;
-        console.error(errorMsg);
-        if (auth.verbose) {
-          console.error(`Full response: ${responseText}`);
+      if (auth.verbose) {
+        const responseHeaders: Record<string, string> = {};
+        response.headers.forEach((value, key) => {
+          responseHeaders[key] = value;
+        });
+        console.log(
+          "Response Headers:",
+          JSON.stringify(responseHeaders, null, 2)
+        );
+      }
+
+      // First get the response as text
+      const responseText = await response.text();
+
+      // Handle HTTP status code errors
+      switch (response.status) {
+        case 401:
+        case 403:
+          console.error(
+            `Authentication failed: ${response.status} ${response.statusText}`
+          );
+          throw new AuthenticationError(
+            "Authentication failed. Please check your API key."
+          );
+
+        case 404:
+          if (auth.verbose) {
+            console.log(`Resource not found: ${url}`);
+          } else {
+            // Always log 404 errors even in non-verbose mode
+            console.error(`Resource not found: ${url}`);
+            console.error(`Response body: ${responseText}`);
+          }
+          throw new NotFoundError(`Resource not found: ${endpoint}`);
+
+        case 429:
+          console.error("Rate limit exceeded");
+          throw new ApiError("Rate limit exceeded. Please try again later.");
+      }
+
+      // Try to parse as JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError: any) {
+        console.error("Failed to parse server response as JSON:");
+        console.error("----- Response Body Start -----");
+        console.error(responseText);
+        console.error("----- Response Body End -----");
+
+        throw new ApiError(
+          `Invalid response format: ${parseError.message}. Check server configuration and API endpoints.`
+        );
+      }
+
+      if (!response.ok) {
+        // Handle API error responses
+        console.error("API Error Response:", JSON.stringify(data, null, 2));
+
+        // Special handling for workflow fetch errors (both 404 and 500 with specific message)
+        if (data && data.error === "Failed to fetch workflow") {
+          const errorMsg = `Failed to fetch workflow at ${url}, treating as not found.`;
+          console.error(errorMsg);
+          if (auth.verbose) {
+            console.error(`Full response: ${responseText}`);
+          }
+          throw new NotFoundError(
+            `Failed to fetch workflow. The workflow may not exist or the server encountered an internal error.`
+          );
         }
-        throw new NotFoundError(
-          `Failed to fetch workflow. The workflow may not exist or the server encountered an internal error.`
-        );
+
+        if (data && data.error) {
+          // Handle standard error response format
+          const errorResponse = data as ApiErrorResponse;
+          throw new ApiError(
+            `API error: ${errorResponse.error.message || "Unknown error"}${
+              errorResponse.error.details
+                ? ` - ${errorResponse.error.details}`
+                : ""
+            }`
+          );
+        } else {
+          // If the error structure is not as expected, log the entire response
+          throw new ApiError(
+            `API error: ${response.status} ${
+              response.statusText
+            } - ${JSON.stringify(data)}`
+          );
+        }
       }
 
-      if (data && data.error) {
-        // Handle standard error response format
-        const errorResponse = data as ApiErrorResponse;
-        throw new Error(
-          `API error: ${errorResponse.error.message || "Unknown error"}${
-            errorResponse.error.details
-              ? ` - ${errorResponse.error.details}`
-              : ""
-          }`
-        );
-      } else {
-        // If the error structure is not as expected, log the entire response
-        throw new Error(
-          `API error: ${response.status} ${
-            response.statusText
-          } - ${JSON.stringify(data)}`
-        );
+      return data as T;
+    } catch (fetchError) {
+      // Clear the timeout if we're encountering a different error
+      clearTimeout(timeoutId);
+
+      // Handle specific fetch errors
+      if (
+        fetchError instanceof DOMException &&
+        fetchError.name === "AbortError"
+      ) {
+        throw new NetworkError(`Request timed out after ${timeout}ms`);
       }
+
+      throw fetchError;
     }
-
-    return data as T;
   } catch (error) {
-    // Rethrow NotFoundError so it can be handled specially
-    if (error instanceof NotFoundError) {
+    // Rethrow specific API error types so they can be handled specially
+    if (error instanceof ApiError) {
       throw error;
     }
 
@@ -386,10 +481,19 @@ async function apiRequest<T>(
         error instanceof Error ? error.message : String(error)
       }`
     );
+
+    // Network errors (fetch failures)
+    if (error instanceof TypeError && error.message.includes("fetch")) {
+      throw new NetworkError(
+        "Network error: Failed to connect to API server",
+        error
+      );
+    }
+
     if (error instanceof Error) {
-      throw error;
+      throw new ApiError(error.message, error);
     } else {
-      throw new Error(`Network request failed: ${String(error)}`);
+      throw new ApiError(`Network request failed: ${String(error)}`);
     }
   }
 }
@@ -401,7 +505,17 @@ export async function listWorkflows(
   auth: ApiAuth,
   params?: WorkflowListParams
 ): Promise<WorkflowListResponse> {
-  return apiRequest<WorkflowListResponse>("/workflows", "GET", auth, params);
+  try {
+    return await apiRequest<WorkflowListResponse>(
+      "/workflows",
+      "GET",
+      auth,
+      params
+    );
+  } catch (error) {
+    console.error("Failed to list workflows:", error);
+    throw error;
+  }
 }
 
 /**
@@ -411,6 +525,10 @@ export async function getWorkflowDetail(
   auth: ApiAuth,
   workflowId: string
 ): Promise<WorkflowDetail> {
+  if (!workflowId) {
+    throw new ApiError("Workflow ID is required");
+  }
+
   console.log(`Fetching details for workflow ID: ${workflowId}`);
   try {
     const result = await apiRequest<WorkflowDetail>(

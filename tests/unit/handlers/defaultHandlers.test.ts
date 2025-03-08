@@ -13,8 +13,23 @@ jest.mock("readline", () => ({
 }));
 
 describe("Default Handlers", () => {
+  // Save original console methods
+  const originalConsoleLog = console.log;
+  const originalConsoleError = console.error;
+  const originalConsoleWarn = console.warn;
+
   beforeEach(() => {
-    jest.clearAllMocks();
+    // Mock console methods before each test
+    console.log = jest.fn();
+    console.error = jest.fn();
+    console.warn = jest.fn();
+  });
+
+  afterEach(() => {
+    // Restore console methods after each test
+    console.log = originalConsoleLog;
+    console.error = originalConsoleError;
+    console.warn = originalConsoleWarn;
   });
 
   describe("defaultSocketConnectionHandler", () => {
@@ -26,7 +41,7 @@ describe("Default Handlers", () => {
 
   describe("defaultSocketDisconnectionHandler", () => {
     it("should log disconnection message with reason", () => {
-      const reason = "test-disconnect-reason";
+      const reason = "test-reason";
       defaultSocketDisconnectionHandler(reason);
       expect(console.log).toHaveBeenCalledWith("Socket disconnected:", reason);
     });

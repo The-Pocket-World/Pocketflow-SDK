@@ -1,9 +1,16 @@
 // Export socket connection functions
-import { connectSocket } from "./socket/connect";
-import { runWorkflow } from "./socket/workflow";
+import { connectSocket, SocketConnectionError } from "./socket/connect";
+import { runWorkflow, WorkflowError } from "./socket/workflow";
 
 // Export workflow HTTP API functions
-import { listWorkflows, getWorkflowDetail, NotFoundError } from "./http/client";
+import { 
+  listWorkflows, 
+  getWorkflowDetail, 
+  NotFoundError,
+  ApiError,
+  AuthenticationError,
+  NetworkError
+} from "./http/client";
 
 // Export CLI functionality
 import * as cli from "./cli";
@@ -44,11 +51,20 @@ export {
   // Socket functions
   connectSocket,
   runWorkflow,
+  
+  // Socket error classes
+  SocketConnectionError,
+  WorkflowError,
 
   // HTTP API functions
   listWorkflows,
   getWorkflowDetail,
+  
+  // HTTP API error classes
   NotFoundError,
+  ApiError,
+  AuthenticationError,
+  NetworkError,
 
   // CLI functionality
   cli,
