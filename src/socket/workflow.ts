@@ -64,7 +64,6 @@ export const defaultHandlers: EventHandlers = {
   run_error: (data) => {
     console.error(`❌ Workflow Error: ${data.message}`);
     if (data.stack) console.error(`Stack: ${data.stack}`);
-    // Socket disconnection will be handled by the wrapper in runWorkflow
   },
   run_warning: (data) => {
     console.warn(`⚠️ Workflow Warning: ${data.message}`);
@@ -79,7 +78,6 @@ export const defaultHandlers: EventHandlers = {
     } else {
       console.log(`✅ Workflow Completed: ${data.message}`);
     }
-    // Socket disconnection will be handled by the wrapper in runWorkflow
   },
   run_start: (data) => {
     console.log(`🚀 Workflow Started: ${data.message}`);
@@ -101,7 +99,6 @@ export const defaultHandlers: EventHandlers = {
   workflow_error: (data: any) => {
     console.error(`❌ Workflow Error: ${data.message || "Unknown error"}`);
     if (data.stack) console.error(`Stack: ${data.stack}`);
-    // Socket disconnection will be handled by the wrapper in runWorkflow
   },
 };
 
@@ -161,7 +158,6 @@ export const prettyLogHandlers: EventHandlers = {
       console.error(`\nStack Trace:`);
       console.error(data.stack);
     }
-    // Socket disconnection will be handled by the wrapper in runWorkflow
   },
   run_warning: (data) => {
     console.warn(`\n┌─────────────────────────┐`);
@@ -192,7 +188,6 @@ export const prettyLogHandlers: EventHandlers = {
     if (data.output) {
       console.log(`🏁 Output:`, data.output);
     }
-    // Socket disconnection will be handled by the wrapper in runWorkflow
   },
   run_start: (data) => {
     console.log(`🚀 Workflow started: ${data.message || "Starting workflow"}`);
@@ -324,7 +319,8 @@ export const runWorkflow = (
           if (
             eventType === "run_complete" ||
             eventType === "run_error" ||
-            eventType === "workflow_error"
+            eventType === "workflow_error" ||
+            eventType === "run_warning"
           ) {
             // Create event-specific wrapper with socket disconnection
             socket.on(eventType, (data: any) => {
@@ -371,7 +367,8 @@ export const runWorkflow = (
           if (
             eventName === "run_complete" ||
             eventName === "run_error" ||
-            eventName === "workflow_error"
+            eventName === "workflow_error" ||
+            eventName === "run_warning"
           ) {
             // Add event handler with socket disconnection
             socket.on(eventName, (data: any) => {
