@@ -19,8 +19,6 @@ A TypeScript SDK for interacting with the PocketFlow API, enabling seamless inte
     - [`runWorkflow`](#runworkflow)
     - [Event Handlers](#event-handlers)
     - [HTTP API Functions](#http-api-functions)
-  - [🧪 Examples](#-examples)
-    - [Environment Setup](#environment-setup)
   - [👥 Contributing](#-contributing)
   - [📄 License](#-license)
 
@@ -94,6 +92,10 @@ async function main() {
           run_complete: (output) => {
             console.log("Run complete");
             console.log(output.state.tweets);
+            // Process output data if available
+            if (output.output) {
+              console.log(output.output);
+            }
             socket.disconnect();
           },
         },
@@ -105,6 +107,21 @@ async function main() {
 }
 
 main();
+```
+
+Remember to create a `.env` file and add your PocketFlow API key and server URL:
+
+```
+POCKETFLOW_API_KEY=your_api_key_here
+POCKETFLOW_SERVER_URL=https://api.pocketflow.ai
+```
+
+You can get the pocketflow api key from the [PocketFlow dashboard](https://platform.pocketflow.ai/settings/api).
+
+Now, you can run the quickstart example by running:
+
+```bash
+npx ts-node <path-to-quickstart-file>
 ```
 
 ## 📖 Usage Examples
@@ -185,16 +202,25 @@ const myHandlers = {
   ...defaultHandlers,
   run_complete: (data) => {
     console.log("My custom completion handler!");
-    console.log(data);
+    console.log(data.state);
+    // Process output data if available
+    if (data.output) {
+      console.log("Workflow output:", data.output);
+    }
   },
 };
 
 // Or use the pretty log handlers for a more visually appealing output
 const myPrettyHandlers = {
   ...prettyLogHandlers,
-  final_output: (data) => {
-    console.log("✨ FINAL OUTPUT ✨");
-    console.log(JSON.stringify(data.data, null, 2));
+  run_complete: (data) => {
+    console.log("✨ WORKFLOW COMPLETE ✨");
+    console.log(JSON.stringify(data.state, null, 2));
+    // Process output data if available
+    if (data.output) {
+      console.log("✨ OUTPUT DATA ✨");
+      console.log(JSON.stringify(data.output, null, 2));
+    }
   },
 };
 ```
@@ -252,37 +278,6 @@ async function main() {
 
 main();
 ```
-
-## 🧪 Examples
-
-The SDK includes example implementations that demonstrate how to use it with real-world workflows.
-
-### Environment Setup
-
-1. Copy the `.env.example` file to `.env`:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Edit the `.env` file and add your PocketFlow API key and server URL:
-
-   ```
-   POCKETFLOW_API_KEY=your_api_key_here
-   POCKETFLOW_SERVER_URL=https://api.pocketflow.ai
-   ```
-
-3. Create a test file using the quickstart example:
-
-   ```bash
-   touch test.ts
-   ```
-
-4. Paste the quickstart code into test.ts and run it:
-
-   ```bash
-   npx ts-node test.ts
-   ```
 
 ## 👥 Contributing
 

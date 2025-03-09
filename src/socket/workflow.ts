@@ -30,6 +30,7 @@ export interface ServerEmittedEvents {
     state: Record<string, unknown>;
     warning: boolean;
     errors?: any[];
+    output?: any;
   };
   run_start: { message: string };
 
@@ -42,7 +43,6 @@ export interface ServerEmittedEvents {
     isError: boolean;
   };
   node_error: { node: string; error: any; state: any };
-  final_output: { type: string; data: any };
 
   // Add missing handlers that the tests expect
   workflow_received: { message?: string };
@@ -93,10 +93,6 @@ export const defaultHandlers: EventHandlers = {
   node_error: (data) => {
     console.error(`❌ Error in node '${data.node}':`, data.error);
   },
-  final_output: (data) => {
-    console.log(`🏁 Final Output (${data.type}):`, data.data);
-  },
-  // Add missing handlers that the tests expect
   workflow_received: () => {
     console.log(`📥 Workflow received by server`);
   },
@@ -126,6 +122,10 @@ export const quietHandlers: EventHandlers = {
     } else {
       console.log(`✅ Workflow Completed`);
     }
+    // Log output data if available
+    if (data.output) {
+      console.log(`🏁 Output data:`, data.output);
+    }
   },
   run_start: () => {}, // No logging for workflow start
 
@@ -138,7 +138,6 @@ export const quietHandlers: EventHandlers = {
   node_error: (data) => {
     console.error(`❌ Error in node '${data.node}'`);
   },
-  final_output: () => {}, // No logging for final output
   workflow_received: () => {}, // No logging for workflow received
   workflow_error: (data: any) => {
     console.error(`❌ Workflow Error: ${data.message || "Unknown error"}`);
@@ -174,53 +173,43 @@ export const prettyLogHandlers: EventHandlers = {
   },
   run_complete: (data) => {
     if (data.warning || (data.errors && data.errors.length > 0)) {
-      console.warn(`\n┌─────────────────────────────────────┐`);
-      console.warn(`│ 🟡 WORKFLOW COMPLETED WITH WARNINGS │`);
-      console.warn(`└─────────────────────────────────────┘`);
-      console.warn(data.message);
+      console.warn(
+        `⚠️ Workflow completed with warnings: ${
+          data.message || "Unknown warning"
+        }`
+      );
       if (data.errors) {
-        console.warn(`\nErrors:`);
-        data.errors.forEach((err, i) => {
-          console.warn(`[${i + 1}] ${JSON.stringify(err)}`);
-        });
+        console.warn(`Errors:`, data.errors);
       }
     } else {
-      console.log(`\n┌─────────────────────────────────────┐`);
-      console.log(`│ 🟢 WORKFLOW COMPLETED SUCCESSFULLY  │`);
-      console.log(`└─────────────────────────────────────┘`);
-      console.log(data.message);
+      console.log(`✅ Workflow completed: ${data.message || "Success"}`);
     }
-    console.log(`\nFinal State:`, JSON.stringify(data.state, null, 2));
+    // Log output data if available
+    if (data.output) {
+      console.log(`🏁 Output:`, data.output);
+    }
   },
   run_start: (data) => {
-    console.log(`\n┌─────────────────────────────────────┐`);
-    console.log(`│ 🚀 WORKFLOW STARTED                 │`);
-    console.log(`└─────────────────────────────────────┘`);
-    console.log(data.message);
+    console.log(`🚀 Workflow started: ${data.message || "Starting workflow"}`);
   },
 
   // Stream and node related events
   stream_output: (data) => {
-    const icon = data.isError ? "❌" : "📤";
-    console.log(`\n${icon} Stream Output from Node: ${data.node}`);
-    console.log(`Type: ${data.type}`);
-    console.log(`Action: ${data.action}`);
-    console.log(`State:`, JSON.stringify(data.state, null, 2));
+    // Choose an emoji based on isError flag
+    const prefix = data.isError ? "❌" : "🔄";
+    console.log(
+      `${prefix} from node '${data.node}' (${data.type}): ${data.action}`
+    );
   },
   node_error: (data) => {
-    console.error(`\n┌─────────────────────────────────────┐`);
-    console.error(`│ ❌ NODE ERROR                       │`);
-    console.error(`└─────────────────────────────────────┘`);
-    console.error(`Node: ${data.node}`);
-    console.error(`Error:`, data.error);
-    console.error(`State:`, JSON.stringify(data.state, null, 2));
+    console.error(`❌ Error in node '${data.node}':`, data.error);
   },
-  final_output: (data) => {
-    console.log(`\n┌─────────────────────────────────────┐`);
-    console.log(`│ 🏁 FINAL OUTPUT                     │`);
-    console.log(`└─────────────────────────────────────┘`);
-    console.log(`Type: ${data.type}`);
-    console.log(`Data:`, JSON.stringify(data.data, null, 2));
+  workflow_received: () => {
+    console.log(`📥 Workflow received by server`);
+  },
+  workflow_error: (data: any) => {
+    console.error(`❌ Workflow Error: ${data.message || "Unknown error"}`);
+    if (data.stack) console.error(`Stack: ${data.stack}`);
   },
 };
 

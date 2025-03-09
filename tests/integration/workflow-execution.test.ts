@@ -73,14 +73,14 @@ describe("Workflow Execution Integration", () => {
       "connectSocket"
     );
 
-    // Create a promise to be resolved when final_output is received
-    let finalOutputPromise = new Promise<void>((resolve) => {
+    // Create a promise to be resolved when run_complete with output is received
+    let outputPromise = new Promise<void>((resolve) => {
       // Connect socket and cast to MockSocket since we're using the mocked implementation
       connectSocket(url, {
         token,
-        handleStreamOutput: (data: any) => {
-          if (data.type === "final_output") {
-            expect(data.data).toEqual(finalOutput.data);
+        handleLog: (data: any) => {
+          if (data.output) {
+            expect(data.output).toEqual(finalOutput.data);
             resolve();
           }
         },
@@ -117,8 +117,8 @@ describe("Workflow Execution Integration", () => {
           message: "Workflow completed",
           state: {},
           warning: false,
+          output: finalOutput.data,
         });
-        mockSocket.emit("final_output", finalOutput);
       });
     });
 
@@ -127,7 +127,7 @@ describe("Workflow Execution Integration", () => {
       setTimeout(() => reject(new Error("Test timed out")), 4000);
     });
 
-    await Promise.race([finalOutputPromise, timeoutPromise]);
+    await Promise.race([outputPromise, timeoutPromise]);
 
     // Verify socket was created with correct URL
     expect(connectSocketSpy).toHaveBeenCalledWith(
