@@ -64,6 +64,7 @@ export const defaultHandlers: EventHandlers = {
   run_error: (data) => {
     console.error(`❌ Workflow Error: ${data.message}`);
     if (data.stack) console.error(`Stack: ${data.stack}`);
+    // Socket disconnection will be handled by the wrapper in runWorkflow
   },
   run_warning: (data) => {
     console.warn(`⚠️ Workflow Warning: ${data.message}`);
@@ -78,6 +79,7 @@ export const defaultHandlers: EventHandlers = {
     } else {
       console.log(`✅ Workflow Completed: ${data.message}`);
     }
+    // Socket disconnection will be handled by the wrapper in runWorkflow
   },
   run_start: (data) => {
     console.log(`🚀 Workflow Started: ${data.message}`);
@@ -99,6 +101,7 @@ export const defaultHandlers: EventHandlers = {
   workflow_error: (data: any) => {
     console.error(`❌ Workflow Error: ${data.message || "Unknown error"}`);
     if (data.stack) console.error(`Stack: ${data.stack}`);
+    // Socket disconnection will be handled by the wrapper in runWorkflow
   },
 };
 
@@ -158,6 +161,7 @@ export const prettyLogHandlers: EventHandlers = {
       console.error(`\nStack Trace:`);
       console.error(data.stack);
     }
+    // Socket disconnection will be handled by the wrapper in runWorkflow
   },
   run_warning: (data) => {
     console.warn(`\n┌─────────────────────────┐`);
@@ -188,6 +192,7 @@ export const prettyLogHandlers: EventHandlers = {
     if (data.output) {
       console.log(`🏁 Output:`, data.output);
     }
+    // Socket disconnection will be handled by the wrapper in runWorkflow
   },
   run_start: (data) => {
     console.log(`🚀 Workflow started: ${data.message || "Starting workflow"}`);
@@ -277,32 +282,75 @@ export const runWorkflow = (
   }
 
   try {
-    // Merge default and custom handlers
-    // For each event type, remove any existing listeners and register the new one
+    // Clear any existing event handlers for the workflow events
+    // This prevents duplicate handlers if the same socket is reused
     const eventTypes = Object.keys(
       baseHandlers
     ) as (keyof ServerEmittedEvents)[];
+    eventTypes.forEach((eventType) => {
+      try {
+        socket.removeAllListeners(eventType);
+      } catch (error) {
+        console.error(
+          `Failed to remove event listeners for ${eventType}:`,
+          error
+        );
+      }
+    });
 
-    // Register merged handlers for each event type
+    // Function to safely disconnect the socket
+    const safeDisconnect = () => {
+      try {
+        if (
+          socket &&
+          typeof socket.disconnect === "function" &&
+          socket.connected
+        ) {
+          console.log("Disconnecting socket after workflow completion");
+          socket.disconnect();
+        }
+      } catch (error) {
+        console.error("Error disconnecting socket:", error);
+      }
+    };
+
+    // Register handlers for all event types
     eventTypes.forEach((eventType) => {
       const handler = handlers[eventType] || baseHandlers[eventType];
 
       if (handler) {
         try {
-          // Remove any existing listener
-          socket.removeAllListeners(eventType);
-
-          // Add new listener
-          socket.on(eventType, (data: any) => {
-            try {
-              handler(data);
-            } catch (error) {
-              console.error(`Error in ${eventType} handler:`, error);
-            }
-          });
+          // For events that should close the socket, add disconnect logic
+          if (
+            eventType === "run_complete" ||
+            eventType === "run_error" ||
+            eventType === "workflow_error"
+          ) {
+            // Create event-specific wrapper with socket disconnection
+            socket.on(eventType, (data: any) => {
+              try {
+                // Call the original handler
+                handler(data);
+              } catch (error) {
+                console.error(`Error in ${eventType} handler:`, error);
+              } finally {
+                // Always disconnect after these events
+                safeDisconnect();
+              }
+            });
+          } else {
+            // Normal event handling without socket disconnection
+            socket.on(eventType, (data: any) => {
+              try {
+                handler(data);
+              } catch (error) {
+                console.error(`Error in ${eventType} handler:`, error);
+              }
+            });
+          }
         } catch (error) {
           console.error(
-            `Failed to register handler for '${eventType}':`,
+            `Failed to register handler for custom event '${eventType}':`,
             error
           );
         }
@@ -310,21 +358,42 @@ export const runWorkflow = (
     });
 
     // Add event handlers for any custom handlers not in the default set
-    Object.entries(handlers).forEach(([eventType, handler]) => {
-      const eventName = eventType as keyof ServerEmittedEvents;
-      if (!eventTypes.includes(eventName) && handler) {
+    Object.entries(handlers).forEach(([customEventType, handler]) => {
+      const eventName = customEventType as string;
+
+      // Skip if the event was already handled in the previous loop
+      if (!eventTypes.includes(eventName as any) && handler) {
         try {
           // Remove any existing listener
           socket.removeAllListeners(eventName);
 
-          // Add new listener with error handling
-          socket.on(eventName, (data: any) => {
-            try {
-              handler(data);
-            } catch (error) {
-              console.error(`Error in ${eventName} handler:`, error);
-            }
-          });
+          // Check if this is an event that should trigger socket disconnection
+          if (
+            eventName === "run_complete" ||
+            eventName === "run_error" ||
+            eventName === "workflow_error"
+          ) {
+            // Add event handler with socket disconnection
+            socket.on(eventName, (data: any) => {
+              try {
+                handler(data);
+              } catch (error) {
+                console.error(`Error in custom ${eventName} handler:`, error);
+              } finally {
+                // Always disconnect after these events
+                safeDisconnect();
+              }
+            });
+          } else {
+            // Normal event handling without socket disconnection
+            socket.on(eventName, (data: any) => {
+              try {
+                handler(data);
+              } catch (error) {
+                console.error(`Error in custom ${eventName} handler:`, error);
+              }
+            });
+          }
         } catch (error) {
           console.error(
             `Failed to register handler for custom event '${eventName}':`,

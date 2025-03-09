@@ -14,6 +14,243 @@ import { runYoutubeSummarizerWorkflow } from "../../src/flows/youtube_summarizer
 import { extractStartupIdeas } from "./anthropic-utils";
 import { generateHtmlReport, saveHtmlReport } from "./template-utils";
 
+// Custom wrapper for YouTube summarizer workflow to handle consolidated events
+async function runYoutubeSummarizerWithFallback(
+  input: {
+    videoUrl: string;
+    summaryLength: string;
+  },
+  authToken: string,
+  socket: any
+): Promise<{
+  summary: string;
+  keyPoints: any[];
+  metadata: Record<string, any>;
+}> {
+  // Store data from stream events
+  let lastKnownSummary: string | undefined;
+  let lastKnownKeyPoints: any[] = [];
+  let lastKnownMetadata: Record<string, any> = {};
+  let completionPromise: Promise<any>;
+
+  // Create a promise to handle the workflow result
+  const runCompletePromise = new Promise((resolve, reject) => {
+    // Add our own event handlers on top of the socket
+    const originalOn = socket.on.bind(socket);
+    socket.on = function (
+      eventName: string,
+      callback: (...args: any[]) => void
+    ) {
+      if (eventName === "stream_output") {
+        originalOn(eventName, (data: any) => {
+          // Track summary and key points from stream events
+          if (data.type === "node_update" && data.state) {
+            if (data.state.summary) {
+              console.log("Found summary in stream_output event");
+              lastKnownSummary = data.state.summary;
+            }
+            if (data.state.keyPoints) {
+              console.log("Found keyPoints in stream_output event");
+              lastKnownKeyPoints = data.state.keyPoints;
+            }
+            if (data.state.metadata) {
+              console.log("Found metadata in stream_output event");
+              lastKnownMetadata = data.state.metadata;
+            }
+          }
+          callback(data);
+        });
+      } else if (eventName === "run_complete") {
+        originalOn(eventName, (data: any) => {
+          console.log(
+            "Received run_complete event. Data has output:",
+            !!data.output
+          );
+
+          // Check if output field exists in run_complete event
+          if (data.output) {
+            if (data.output.summary) {
+              console.log("Found summary in run_complete output");
+              lastKnownSummary = data.output.summary;
+            }
+            if (data.output.keyPoints) {
+              console.log("Found keyPoints in run_complete output");
+              lastKnownKeyPoints = data.output.keyPoints;
+            }
+            if (data.output.metadata) {
+              console.log("Found metadata in run_complete output");
+              lastKnownMetadata = data.output.metadata;
+            }
+          }
+
+          callback(data);
+
+          // Resolve with whatever data we have at this point
+          resolve({
+            summary: lastKnownSummary || "",
+            keyPoints: lastKnownKeyPoints,
+            metadata: lastKnownMetadata,
+          });
+        });
+      } else if (eventName === "run_error") {
+        originalOn(eventName, (data: any) => {
+          callback(data);
+          reject(new Error(data.message || "Workflow execution failed"));
+        });
+      } else {
+        originalOn(eventName, callback);
+      }
+      return this;
+    };
+  });
+
+  // Call the original function and wait for the run_complete event
+  const runPromise = runYoutubeSummarizerWorkflow(input, authToken, socket);
+
+  try {
+    // Wait for either the workflow result or our own run_complete handler
+    const result = (await Promise.race([runPromise, runCompletePromise])) as {
+      summary?: string;
+      keyPoints?: any[];
+      metadata?: Record<string, any>;
+    };
+
+    // Build the final result with fallbacks
+    return {
+      summary: result.summary || lastKnownSummary || "",
+      keyPoints: result.keyPoints || lastKnownKeyPoints || [],
+      metadata: result.metadata || lastKnownMetadata || {},
+    };
+  } catch (error) {
+    console.error("Error in YouTube summarizer workflow:", error);
+
+    // If we have any data from stream events, return that instead of failing
+    if (
+      lastKnownSummary ||
+      lastKnownKeyPoints.length > 0 ||
+      Object.keys(lastKnownMetadata).length > 0
+    ) {
+      console.log(
+        "Using captured data from stream events despite workflow error"
+      );
+      return {
+        summary: lastKnownSummary || "",
+        keyPoints: lastKnownKeyPoints || [],
+        metadata: lastKnownMetadata || {},
+      };
+    }
+
+    throw error;
+  }
+}
+
+// Custom wrapper for Twitter monitoring workflow to handle consolidated events
+async function runTwitterMonitoringWithFallback(
+  input: any,
+  authToken: string,
+  socket: any
+): Promise<{ tweets: any[] }> {
+  // Store tweets from stream events
+  let lastKnownTweets: any[] = [];
+
+  // Create a promise to handle the workflow result
+  const runCompletePromise = new Promise<{ tweets: any[] }>(
+    (resolve, reject) => {
+      // Add our own event handlers on top of the socket
+      const originalOn = socket.on.bind(socket);
+      socket.on = function (
+        eventName: string,
+        callback: (...args: any[]) => void
+      ) {
+        if (eventName === "stream_output") {
+          originalOn(eventName, (data: any) => {
+            // Track tweets from stream events
+            if (
+              data.type === "node_update" &&
+              data.state &&
+              data.state.tweets &&
+              Array.isArray(data.state.tweets)
+            ) {
+              console.log(
+                `Found ${data.state.tweets.length} tweets in stream_output event`
+              );
+              lastKnownTweets = data.state.tweets;
+            }
+            callback(data);
+          });
+        } else if (eventName === "run_complete") {
+          originalOn(eventName, (data: any) => {
+            console.log(
+              "Received run_complete event. Data has output:",
+              !!data.output
+            );
+
+            // Check if output field exists in run_complete event
+            if (
+              data.output &&
+              data.output.tweets &&
+              Array.isArray(data.output.tweets)
+            ) {
+              console.log(
+                `Found ${data.output.tweets.length} tweets in run_complete output`
+              );
+              lastKnownTweets = data.output.tweets;
+            }
+
+            callback(data);
+
+            // Resolve with whatever data we have at this point
+            resolve({
+              tweets: lastKnownTweets || [],
+            });
+          });
+        } else if (eventName === "run_error") {
+          originalOn(eventName, (data: any) => {
+            callback(data);
+            reject(new Error(data.message || "Workflow execution failed"));
+          });
+        } else {
+          originalOn(eventName, callback);
+        }
+        return this;
+      };
+    }
+  );
+
+  // Call the original function and wait for the run_complete event
+  const runPromise = runTwitterMonitoringPostsWorkflow(
+    input,
+    authToken,
+    socket
+  );
+
+  try {
+    // Wait for either the workflow result or our own run_complete handler
+    const result = (await Promise.race([runPromise, runCompletePromise])) as {
+      tweets?: any[];
+    };
+
+    // Build the final result with fallbacks
+    return {
+      tweets: result.tweets || lastKnownTweets || [],
+    };
+  } catch (error) {
+    console.error("Error in Twitter monitoring workflow:", error);
+
+    // If we have any data from stream events, return that instead of failing
+    if (lastKnownTweets.length > 0) {
+      console.log(
+        `Using ${lastKnownTweets.length} tweets from stream events despite workflow error`
+      );
+      return {
+        tweets: lastKnownTweets,
+      };
+    }
+
+    throw error;
+  }
+}
+
 // Load environment variables
 dotenv.config();
 
@@ -112,13 +349,32 @@ export async function runYouTubeToTwitterPipeline(
     try {
       // Step 1: Summarize the YouTube video
       if (verbose) console.log("📝 Summarizing YouTube video...");
-      const summaryResult = await runYoutubeSummarizerWorkflow(
+      const summaryResult = await runYoutubeSummarizerWithFallback(
         {
           videoUrl: options.videoUrl,
           summaryLength,
         },
         authToken,
         sharedSocket // Pass the shared socket
+      );
+
+      console.log("SUMMARY RESULT RECEIVED:");
+      console.log(
+        JSON.stringify(
+          {
+            summaryExists: typeof summaryResult.summary === "string",
+            summaryLength:
+              typeof summaryResult.summary === "string"
+                ? summaryResult.summary.length
+                : 0,
+            keyPointsLength: Array.isArray(summaryResult.keyPoints)
+              ? summaryResult.keyPoints.length
+              : "not an array",
+            metadataExists: !!summaryResult.metadata,
+          },
+          null,
+          2
+        )
       );
 
       if (verbose) {
@@ -131,10 +387,31 @@ export async function runYouTubeToTwitterPipeline(
 
       // Step 2: Extract startup ideas from the summary using Anthropic API
       if (verbose) console.log("💡 Extracting startup ideas from summary...");
+
+      // Add safety check for summary
+      if (!summaryResult.summary || summaryResult.summary.length === 0) {
+        console.log(
+          "⚠️ WARNING: No summary content available. Cannot extract startup ideas."
+        );
+        console.log("Summary result:", summaryResult);
+        throw new Error(
+          "Failed to extract summary from video. The summary is empty or undefined."
+        );
+      }
+
       const startupIdeas = await extractStartupIdeas(
         summaryResult.summary,
         anthropicApiKey
       );
+
+      console.log("STARTUP IDEAS EXTRACTION RESULT:");
+      console.log(`Number of ideas extracted: ${startupIdeas.length}`);
+      if (startupIdeas.length > 0) {
+        console.log(
+          "First idea preview:",
+          startupIdeas[0].substring(0, 100) + "..."
+        );
+      }
 
       if (verbose) {
         console.log(`✅ Extracted ${startupIdeas.length} startup ideas`);
@@ -150,31 +427,44 @@ export async function runYouTubeToTwitterPipeline(
 
       for (const idea of startupIdeas) {
         if (verbose)
-          console.log(`  Searching for: ${idea.substring(0, 40)}...`);
-
-        const twitterResult = await runTwitterMonitoringPostsWorkflow(
-          {
-            prompt: idea,
-            project_description: "Startup idea from YouTube video",
-            limit: tweetsPerIdea,
-            min_likes: minLikes,
-            min_retweets: minRetweets,
-          },
-          authToken,
-          sharedSocket // Pass the shared socket
-        );
-
-        startupIdeasWithTweets.push({
-          idea,
-          tweets: twitterResult.tweets || [],
-        });
-
-        if (verbose) {
           console.log(
-            `    Found ${
-              twitterResult.tweets ? twitterResult.tweets.length : 0
-            } tweets`
+            `\nSearching for tweets related to: ${idea.substring(0, 50)}...`
           );
+
+        try {
+          // Set up query for Twitter search
+          const twitterQuery = idea.split(" ").slice(0, 5).join(" ");
+
+          // Run the Twitter search workflow
+          const twitterResult = await runTwitterMonitoringWithFallback(
+            {
+              prompt: twitterQuery,
+              project_description: "Startup idea from YouTube video",
+              limit: tweetsPerIdea,
+              min_likes: minLikes,
+              min_retweets: minRetweets,
+            },
+            authToken,
+            sharedSocket
+          );
+
+          // Add the idea with tweets to the result array
+          startupIdeasWithTweets.push({
+            idea,
+            tweets: twitterResult.tweets || [],
+          });
+
+          if (verbose) {
+            console.log(
+              `  ✅ Found ${twitterResult.tweets?.length || 0} tweets`
+            );
+          }
+        } catch (error) {
+          console.error(
+            `Error searching for tweets related to: ${idea}:`,
+            error
+          );
+          console.error("Continuing without this idea...");
         }
       }
 

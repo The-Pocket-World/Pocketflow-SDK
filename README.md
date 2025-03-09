@@ -18,7 +18,6 @@ A TypeScript SDK for interacting with the PocketFlow API, enabling seamless inte
     - [`connectSocket`](#connectsocket)
     - [`runWorkflow`](#runworkflow)
     - [Event Handlers](#event-handlers)
-    - [HTTP API Functions](#http-api-functions)
   - [👥 Contributing](#-contributing)
   - [📄 License](#-license)
 
@@ -83,6 +82,7 @@ async function main() {
         // Replace with the input parameters for the workflow
         prompt: "Analyze the market trends for AI assistants",
         project_description: "An AI assistant",
+        limit: 10,
         min_likes: 10,
         min_retweets: 5,
       },
@@ -91,11 +91,7 @@ async function main() {
         handlers: {
           run_complete: (output) => {
             console.log("Run complete");
-            console.log(output.state.tweets);
-            // Process output data if available
-            if (output.output) {
-              console.log(output.output);
-            }
+            console.log(output);
             socket.disconnect();
           },
         },
@@ -191,6 +187,10 @@ function runWorkflow(
 
 The SDK provides default handlers for all server-emitted events:
 
+> **Note:** As of the latest update, workflow output is now consolidated in the `run_complete` event with an `output` field, rather than being sent in a separate `final_output` event.
+
+> **Note:** The SDK now automatically disconnects the socket when a workflow completes or encounters an error. This happens after the `run_complete`, `run_error`, or `workflow_error` events are processed. You don't need to call `socket.disconnect()` in your handlers, but it's safe to do so if you prefer explicit control.
+
 ```typescript
 import {
   defaultHandlers,
@@ -207,6 +207,7 @@ const myHandlers = {
     if (data.output) {
       console.log("Workflow output:", data.output);
     }
+    // No need to call socket.disconnect() - it's done automatically
   },
 };
 
@@ -223,60 +224,6 @@ const myPrettyHandlers = {
     }
   },
 };
-```
-
-### HTTP API Functions
-
-The SDK provides functions for accessing workflow information through the HTTP API:
-
-```typescript
-import { listWorkflows, getWorkflowDetail } from "path/to/local/sdk/src/index";
-import dotenv from "dotenv";
-
-// Load environment variables
-dotenv.config();
-
-// Get API key from environment variables
-const apiKey = process.env.POCKETFLOW_API_KEY;
-
-if (!apiKey) {
-  console.error("Error: POCKETFLOW_API_KEY is not set in the environment");
-  process.exit(1);
-}
-
-async function main() {
-  try {
-    // List all workflows with pagination
-    const { workflows, meta } = await listWorkflows(
-      {
-        apiKey,
-        verbose: true, // Enable detailed logging
-      },
-      {
-        limit: 10,
-        offset: 0,
-        sort: "updated_at",
-        order: "desc",
-        search: "analysis", // Free text search
-      }
-    );
-
-    // Get detailed information about a specific workflow
-    const workflowDetail = await getWorkflowDetail(
-      {
-        apiKey,
-      },
-      "workflow-id-here"
-    );
-
-    console.log(`Workflow name: ${workflowDetail.name}`);
-    console.log(`Nodes: ${workflowDetail.nodes.length}`);
-  } catch (error) {
-    console.error("Error:", error);
-  }
-}
-
-main();
 ```
 
 ## 👥 Contributing

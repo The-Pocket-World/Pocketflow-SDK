@@ -118,7 +118,7 @@ export async function runTwitterAnalysis(
       throw new Error("Failed to connect to PocketFlow server");
     }
 
-    // Create a promise to handle the workflow execution
+    // Create a promise to be resolved when the workflow completes
     return new Promise<ExtendedTwitterOutput>((resolve, reject) => {
       // Set a flag to track if the workflow has completed
       let isCompleted = false;
@@ -135,8 +135,27 @@ export async function runTwitterAnalysis(
         }
       }, 5 * 60 * 1000); // 5 minutes timeout
 
+      // Store the last known tweets from stream events
+      let lastKnownTweets: any[] = [];
+
       // Define handlers for workflow events - minimize logging
       const handlers = {
+        // Track tweets from stream events
+        stream_output: (data: any) => {
+          // If this is a node_update, check for tweets
+          if (data.type === "node_update" && data.state) {
+            // If we have tweets, store them
+            if (data.state.tweets && Array.isArray(data.state.tweets)) {
+              if (verbose) {
+                console.log(
+                  `Found ${data.state.tweets.length} tweets in stream_output event`
+                );
+              }
+              lastKnownTweets = data.state.tweets;
+            }
+          }
+        },
+
         // Handle workflow completion
         run_complete: (data: any) => {
           if (verbose) {
@@ -151,9 +170,14 @@ export async function runTwitterAnalysis(
 
           try {
             // Check for output first (new consolidated event format)
-            if (data.output) {
+            if (data.output && Array.isArray(data.output.tweets)) {
+              tweetsData = data.output.tweets;
+              console.log(`Found ${tweetsData.length} tweets in output.tweets`);
+            }
+            // Try direct output if it's an array
+            else if (data.output && Array.isArray(data.output)) {
               tweetsData = data.output;
-              console.log(`Found ${tweetsData.length} tweets in output`);
+              console.log(`Found ${tweetsData.length} tweets in output array`);
             }
             // Fallback to checking state (for backwards compatibility)
             else if (data && data.state) {
@@ -162,36 +186,22 @@ export async function runTwitterAnalysis(
                 tweetsData = data.state.tweets;
                 console.log(`Found ${tweetsData.length} tweets in results`);
               } else if (
-                typeof data.state === "string" &&
-                data.state.includes("tweets:")
+                typeof data.state === "object" &&
+                Array.isArray(data.state)
               ) {
-                // Extract tweets from YAML-formatted string
-                const yamlContent = data.state;
-                // First locate the tweets array start
-                const tweetsStart = yamlContent.indexOf("tweets: [");
-                if (tweetsStart !== -1) {
-                  // Find the matching closing bracket with proper nesting tracking
-                  let openBrackets = 1; // Already found the opening bracket
-                  let position = tweetsStart + 9; // Skip "tweets: ["
-                  while (openBrackets > 0 && position < yamlContent.length) {
-                    if (yamlContent[position] === "[") openBrackets++;
-                    if (yamlContent[position] === "]") openBrackets--;
-                    position++;
-                  }
-
-                  // If we found the matching closing bracket
-                  if (openBrackets === 0) {
-                    // Extract the tweets JSON array with brackets
-                    const tweetsJson = yamlContent.substring(
-                      tweetsStart + 8,
-                      position
-                    );
-                    // Parse the JSON array
-                    tweetsData = JSON.parse(tweetsJson);
-                    console.log(`Found ${tweetsData.length} tweets in results`);
-                  }
-                }
+                // If data.state is an array
+                tweetsData = data.state;
+                console.log(
+                  `Found ${tweetsData.length} tweets in results (array)`
+                );
               }
+            }
+            // Fall back to the captured data from stream_output events
+            else if (lastKnownTweets.length > 0) {
+              console.log(
+                `Falling back to captured ${lastKnownTweets.length} tweets from stream_output events`
+              );
+              tweetsData = lastKnownTweets;
             }
 
             // Update the shared result with the extracted tweets
