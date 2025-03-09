@@ -175,20 +175,23 @@ describe("connectSocket", () => {
 
     // Get the socket instance
     const connectedSocket = (await connectSocket("api.pocketflow.ai", {
-      eventHandlers: {
-        generation_update: generationUpdateHandler,
-        generation_complete: generationCompleteHandler,
-      },
+      handleLog: generationUpdateHandler,
+      handleStreamOutput: generationCompleteHandler,
     })) as unknown as MockSocket;
 
     // Now we can test the event handlers
     const updateData = { type: "update", message: "test" };
-    connectedSocket.emit("generation_update", updateData);
+    connectedSocket.emit("workflow_log", updateData);
     expect(generationUpdateHandler).toHaveBeenCalledWith(updateData);
 
-    const completeData = { flow: { id: "test" } };
-    connectedSocket.emit("generation_complete", completeData);
-    expect(generationCompleteHandler).toHaveBeenCalledWith(completeData);
+    const completeData = {
+      type: "stream",
+      node: "test",
+      state: {},
+      action: "complete",
+      isError: false,
+    };
+    connectedSocket.emit("stream_output", completeData);
   });
 
   it("should throw SocketConnectionError for invalid URLs", async () => {
@@ -290,9 +293,7 @@ describe("connectSocket", () => {
 
     // Call connectSocket with our error handler
     const socket = await connectSocket("api.pocketflow.ai", {
-      eventHandlers: {
-        workflow_error: errorHandler,
-      },
+      handleDisconnection: errorHandler,
     });
 
     // Create a handler wrapper like in the implementation

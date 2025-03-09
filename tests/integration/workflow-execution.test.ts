@@ -78,11 +78,11 @@ describe("Workflow Execution Integration", () => {
       // Connect socket and cast to MockSocket since we're using the mocked implementation
       connectSocket(url, {
         token,
-        eventHandlers: {
-          final_output: (data: typeof finalOutput) => {
-            expect(data).toEqual(finalOutput);
+        handleStreamOutput: (data: any) => {
+          if (data.type === "final_output") {
+            expect(data.data).toEqual(finalOutput.data);
             resolve();
-          },
+          }
         },
       }).then((socket) => {
         const mockSocket = socket as unknown as MockSocket;
@@ -163,13 +163,13 @@ describe("Workflow Execution Integration", () => {
       // Connect to the socket server
       connectSocket(url, {
         token,
-        eventHandlers: {
-          run_error: (error: any) => {
+        handleLog: (error: any) => {
+          if (error.type === "run_error") {
             expect(error).toEqual(runError);
             console.error(`❌ Workflow Error: ${error.message}`);
             if (error.stack) console.error(`Stack: ${error.stack}`);
             resolve();
-          },
+          }
         },
       }).then((socket) => {
         const mockSocket = socket as unknown as MockSocket;

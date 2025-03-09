@@ -7,7 +7,7 @@ export class WorkflowError extends Error {
   constructor(message: string, public readonly cause?: Error) {
     super(message);
     this.name = "WorkflowError";
-    
+
     // Maintain the prototype chain for instanceof checks
     Object.setPrototypeOf(this, WorkflowError.prototype);
   }
@@ -17,11 +17,6 @@ export class WorkflowError extends Error {
  * Interface for all events emitted by the server to clients
  */
 export interface ServerEmittedEvents {
-  // Generation related events
-  generation_error: { message: string };
-  generation_update: { type: string; message: string };
-  generation_complete: { flow: any };
-
   // Workflow execution related events
   run_error: { message: string; stack?: string };
   run_warning: {
@@ -65,12 +60,6 @@ export type EventHandlers = {
  * Default handlers for all server-emitted events
  */
 export const defaultHandlers: EventHandlers = {
-  // Generation related events - minimal handling as these are not the focus
-  generation_error: (data) =>
-    console.error(`Generation Error: ${data.message}`),
-  generation_update: () => {}, // No-op as requested
-  generation_complete: () => {}, // No-op as requested
-
   // Workflow execution related events
   run_error: (data) => {
     console.error(`❌ Workflow Error: ${data.message}`);
@@ -121,12 +110,6 @@ export const defaultHandlers: EventHandlers = {
  * Quiet handlers that minimize logging for non-critical events
  */
 export const quietHandlers: EventHandlers = {
-  // Generation related events
-  generation_error: (data) =>
-    console.error(`Generation Error: ${data.message}`),
-  generation_update: () => {}, // No-op 
-  generation_complete: () => {}, // No-op
-
   // Workflow execution related events - only log errors and completion
   run_error: (data) => {
     console.error(`❌ Workflow Error: ${data.message}`);
@@ -166,20 +149,10 @@ export const quietHandlers: EventHandlers = {
  * Pretty logging handlers that format the output in a more readable way
  */
 export const prettyLogHandlers: EventHandlers = {
-  // Generation related events - minimal handling as these are not the focus
-  generation_error: (data) => {
-    console.error(`\n┌─────────────────────────────────────┐`);
-    console.error(`│ 🔴 GENERATION ERROR                  │`);
-    console.error(`└─────────────────────────────────────┘`);
-    console.error(data.message);
-  },
-  generation_update: () => {}, // No-op as requested
-  generation_complete: () => {}, // No-op as requested
-
   // Workflow execution related events
   run_error: (data) => {
     console.error(`\n┌─────────────────────────────────────┐`);
-    console.error(`│ 🔴 WORKFLOW ERROR                    │`);
+    console.error(`│ 🔴 WORKFLOW ERROR                   │`);
     console.error(`└─────────────────────────────────────┘`);
     console.error(data.message);
     if (data.stack) {
@@ -188,9 +161,9 @@ export const prettyLogHandlers: EventHandlers = {
     }
   },
   run_warning: (data) => {
-    console.warn(`\n┌─────────────────────────────────────┐`);
-    console.warn(`│ 🟠 WORKFLOW WARNING                  │`);
-    console.warn(`└─────────────────────────────────────┘`);
+    console.warn(`\n┌─────────────────────────┐`);
+    console.warn(`│ 🟠 WORKFLOW WARNING     │`);
+    console.warn(`└─────────────────────────┘`);
     console.warn(data.message);
     if (data.errors && data.errors.length > 0) {
       console.warn(`\nErrors:`);
@@ -202,7 +175,7 @@ export const prettyLogHandlers: EventHandlers = {
   run_complete: (data) => {
     if (data.warning || (data.errors && data.errors.length > 0)) {
       console.warn(`\n┌─────────────────────────────────────┐`);
-      console.warn(`│ 🟡 WORKFLOW COMPLETED WITH WARNINGS  │`);
+      console.warn(`│ 🟡 WORKFLOW COMPLETED WITH WARNINGS │`);
       console.warn(`└─────────────────────────────────────┘`);
       console.warn(data.message);
       if (data.errors) {
@@ -213,7 +186,7 @@ export const prettyLogHandlers: EventHandlers = {
       }
     } else {
       console.log(`\n┌─────────────────────────────────────┐`);
-      console.log(`│ 🟢 WORKFLOW COMPLETED SUCCESSFULLY   │`);
+      console.log(`│ 🟢 WORKFLOW COMPLETED SUCCESSFULLY  │`);
       console.log(`└─────────────────────────────────────┘`);
       console.log(data.message);
     }
@@ -236,7 +209,7 @@ export const prettyLogHandlers: EventHandlers = {
   },
   node_error: (data) => {
     console.error(`\n┌─────────────────────────────────────┐`);
-    console.error(`│ ❌ NODE ERROR                        │`);
+    console.error(`│ ❌ NODE ERROR                       │`);
     console.error(`└─────────────────────────────────────┘`);
     console.error(`Node: ${data.node}`);
     console.error(`Error:`, data.error);
@@ -244,7 +217,7 @@ export const prettyLogHandlers: EventHandlers = {
   },
   final_output: (data) => {
     console.log(`\n┌─────────────────────────────────────┐`);
-    console.log(`│ 🏁 FINAL OUTPUT                      │`);
+    console.log(`│ 🏁 FINAL OUTPUT                     │`);
     console.log(`└─────────────────────────────────────┘`);
     console.log(`Type: ${data.type}`);
     console.log(`Data:`, JSON.stringify(data.data, null, 2));
@@ -293,11 +266,11 @@ export const runWorkflow = (
   if (!socket) {
     throw new WorkflowError("Socket connection is required to run a workflow");
   }
-  
+
   if (!workflowId) {
     throw new WorkflowError("Workflow ID is required");
   }
-  
+
   if (!authToken) {
     throw new WorkflowError("Authentication token is required");
   }
@@ -317,17 +290,19 @@ export const runWorkflow = (
   try {
     // Merge default and custom handlers
     // For each event type, remove any existing listeners and register the new one
-    const eventTypes = Object.keys(baseHandlers) as (keyof ServerEmittedEvents)[];
-    
+    const eventTypes = Object.keys(
+      baseHandlers
+    ) as (keyof ServerEmittedEvents)[];
+
     // Register merged handlers for each event type
     eventTypes.forEach((eventType) => {
       const handler = handlers[eventType] || baseHandlers[eventType];
-      
+
       if (handler) {
         try {
           // Remove any existing listener
           socket.removeAllListeners(eventType);
-          
+
           // Add new listener
           socket.on(eventType, (data: any) => {
             try {
@@ -337,7 +312,10 @@ export const runWorkflow = (
             }
           });
         } catch (error) {
-          console.error(`Failed to register handler for '${eventType}':`, error);
+          console.error(
+            `Failed to register handler for '${eventType}':`,
+            error
+          );
         }
       }
     });
@@ -349,7 +327,7 @@ export const runWorkflow = (
         try {
           // Remove any existing listener
           socket.removeAllListeners(eventName);
-          
+
           // Add new listener with error handling
           socket.on(eventName, (data: any) => {
             try {
@@ -359,7 +337,10 @@ export const runWorkflow = (
             }
           });
         } catch (error) {
-          console.error(`Failed to register handler for custom event '${eventName}':`, error);
+          console.error(
+            `Failed to register handler for custom event '${eventName}':`,
+            error
+          );
         }
       }
     });
@@ -370,26 +351,30 @@ export const runWorkflow = (
       token: authToken,
       input: input || {},
     };
-    
+
     // Log what we're about to do
     console.log("Emitting run_workflow event with payload:", {
       flowId: payload.flowId,
       hasInput: !!payload.input,
       hasToken: !!payload.token,
       socketId: socket.id,
-      socketConnected: socket.connected
+      socketConnected: socket.connected,
     });
-    
+
     // Emit run_workflow event to start the workflow
     socket.emit("run_workflow", payload, (ack: any) => {
       // Optional acknowledgment callback, helpful for debugging
       if (ack) {
-        console.log(`Server acknowledged workflow run request: ${JSON.stringify(ack)}`);
+        console.log(
+          `Server acknowledged workflow run request: ${JSON.stringify(ack)}`
+        );
       }
     });
-    
+
     // Log immediately after emission to check if socket is still connected
-    console.log(`After emitting run_workflow - Socket still connected: ${socket.connected}, ID: ${socket.id}`);
+    console.log(
+      `After emitting run_workflow - Socket still connected: ${socket.connected}, ID: ${socket.id}`
+    );
   } catch (error: any) {
     console.error(`Error emitting workflow event: ${error.message}`);
     console.error(`Error stack: ${error.stack}`);
@@ -400,7 +385,7 @@ export const runWorkflow = (
       });
     } else {
       throw new WorkflowError(
-        "Failed to start workflow execution", 
+        "Failed to start workflow execution",
         error instanceof Error ? error : undefined
       );
     }

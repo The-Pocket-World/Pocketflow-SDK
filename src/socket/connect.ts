@@ -24,7 +24,7 @@ export class SocketConnectionError extends Error {
   constructor(message: string, public readonly cause?: Error) {
     super(message);
     this.name = "SocketConnectionError";
-    
+
     // Maintain the prototype chain for instanceof checks
     Object.setPrototypeOf(this, SocketConnectionError.prototype);
   }
@@ -38,11 +38,6 @@ export interface SocketConnectionOptions {
    * Authentication token for the socket server
    */
   token?: string;
-
-  /**
-   * Custom event handlers for workflow events
-   */
-  eventHandlers?: EventHandlers;
 
   /**
    * Function to handle workflow log messages
@@ -83,15 +78,12 @@ export const connectSocket = async (
 ): Promise<Socket> => {
   const {
     token,
-    eventHandlers = {},
     handleLog = defaultWorkflowLogHandler,
     handleFeedback = defaultFeedbackRequestHandler,
     handleStreamOutput = defaultStreamOutputHandler,
     handleConnection = defaultSocketConnectionHandler,
     handleDisconnection = defaultSocketDisconnectionHandler,
   } = options;
-
-  // Ensure the URL has a protocol
   if (!url.startsWith("http://") && !url.startsWith("https://")) {
     url = "https://" + url;
   }
@@ -159,7 +151,9 @@ export const connectSocket = async (
   // Add disconnect event handler with enhanced logging
   socket.on("disconnect", (reason) => {
     console.error(`Socket disconnected: ${reason}`, new Error().stack);
-    console.error(`Disconnect details - Socket ID: ${socket.id}, Connected: ${socket.connected}, URL: ${url}`);
+    console.error(
+      `Disconnect details - Socket ID: ${socket.id}, Connected: ${socket.connected}, URL: ${url}`
+    );
     if (handleDisconnection) {
       handleDisconnection(reason);
     }
@@ -194,7 +188,7 @@ export const connectSocket = async (
       url,
       socketId: socket.id,
       transportOptions: socket.io?.opts?.transports,
-      auth: socketOptions.auth ? "Present" : "Missing"
+      auth: socketOptions.auth ? "Present" : "Missing",
     });
   });
 
@@ -228,9 +222,9 @@ export const connectSocket = async (
           .catch((error) => {
             console.error("Error in feedback response:", error);
             // Still try to send a feedback response to prevent hanging
-            socket.emit("feedback_response", { 
-              input: null, 
-              error: error instanceof Error ? error.message : String(error) 
+            socket.emit("feedback_response", {
+              input: null,
+              error: error instanceof Error ? error.message : String(error),
             });
           });
       } else {
@@ -239,22 +233,9 @@ export const connectSocket = async (
     } catch (error) {
       console.error("Error handling feedback request:", error);
       // Still try to send a feedback response to prevent hanging
-      socket.emit("feedback_response", { 
-        input: null, 
-        error: error instanceof Error ? error.message : String(error) 
-      });
-    }
-  });
-
-  // Register all event handlers from ServerEmittedEvents
-  Object.entries(eventHandlers).forEach(([event, handler]) => {
-    if (handler !== undefined && handler !== null) {
-      socket.on(event, (data) => {
-        try {
-          (handler as any)(data);
-        } catch (error) {
-          console.error(`Error in event handler for '${event}':`, error);
-        }
+      socket.emit("feedback_response", {
+        input: null,
+        error: error instanceof Error ? error.message : String(error),
       });
     }
   });
@@ -267,7 +248,11 @@ export const connectSocket = async (
     await new Promise<void>((resolve, reject) => {
       // Set a timeout for connection
       const timeoutId = setTimeout(() => {
-        reject(new SocketConnectionError("Socket connection timed out after 10 seconds"));
+        reject(
+          new SocketConnectionError(
+            "Socket connection timed out after 10 seconds"
+          )
+        );
       }, 10000);
 
       // Handle successful connection
@@ -279,7 +264,12 @@ export const connectSocket = async (
       // Handle connection error
       socket.once("connect_error", (error) => {
         clearTimeout(timeoutId);
-        reject(new SocketConnectionError("Failed to connect to socket server", error instanceof Error ? error : undefined));
+        reject(
+          new SocketConnectionError(
+            "Failed to connect to socket server",
+            error instanceof Error ? error : undefined
+          )
+        );
       });
     });
   } catch (error) {
@@ -288,14 +278,17 @@ export const connectSocket = async (
       socket.disconnect();
       socket.removeAllListeners();
     } catch (cleanupError) {
-      console.error("Error cleaning up socket after connection failure:", cleanupError);
+      console.error(
+        "Error cleaning up socket after connection failure:",
+        cleanupError
+      );
     }
-    
+
     // Rethrow the error
-    throw error instanceof SocketConnectionError 
-      ? error 
+    throw error instanceof SocketConnectionError
+      ? error
       : new SocketConnectionError(
-          "Failed to establish socket connection", 
+          "Failed to establish socket connection",
           error instanceof Error ? error : undefined
         );
   }

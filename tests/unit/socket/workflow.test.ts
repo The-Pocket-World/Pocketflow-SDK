@@ -279,18 +279,12 @@ describe("Workflow Module", () => {
     it("should have handlers for all server-emitted events", () => {
       // List of events we expect to have default handlers
       const expectedEvents: (keyof ServerEmittedEvents)[] = [
-        "generation_error",
-        "generation_update",
-        "generation_complete",
         "run_error",
         "run_warning",
         "run_complete",
         "run_start",
         "stream_output",
         "node_error",
-        "final_output",
-        "workflow_received",
-        "workflow_error",
       ];
 
       // Check that each event has a handler

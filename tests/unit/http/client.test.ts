@@ -20,14 +20,14 @@ import {
   resetFetchMock,
   mockSuccessResponse,
   mockErrorResponseFn,
-} from "../test-utils/fetch-mock";
+} from "../../mocks/fetch.mock";
 
 // Import mock data
 import {
   mockWorkflowListResponse,
   mockWorkflowDetailResponse,
   mockErrorResponse,
-} from "../test-utils/mock-data";
+} from "../../mocks/fetch.mock";
 
 // Mock the env module to control the SERVER_URL
 jest.mock("../../../src/env", () => ({
