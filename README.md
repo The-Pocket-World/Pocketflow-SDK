@@ -142,7 +142,7 @@ Set the POCKETFLOW_API_KEY environment variable in your `.env` file for the SDK 
 
 ```.env
 POCKETFLOW_API_KEY=pfl_your_api_key
-POCKETFLOW_SERVER_URL=https://api.pocketflow.app
+POCKETFLOW_SERVER_URL=https://api.pocketflow.ai
 ```
 
 ## 📚 API Reference

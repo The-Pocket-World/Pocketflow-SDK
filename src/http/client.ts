@@ -9,7 +9,7 @@ import env from "../env";
  * Base URL for the PocketFlow API
  * Uses POCKETFLOW_SERVER_URL from environment if available
  */
-const SERVER_URL = env.SERVER_URL || "https://api.pocketflow.app";
+const SERVER_URL = env.SERVER_URL || "https://api.pocketflow.ai";
 // Remove trailing slash if present
 const BASE_URL = SERVER_URL.endsWith("/")
   ? SERVER_URL.slice(0, -1)

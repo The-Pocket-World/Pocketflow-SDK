@@ -36,7 +36,7 @@ program
   .action(async (options: { apiKey?: string; verbose: boolean }) => {
     try {
       const apiKey = options.apiKey || env.API_KEY;
-      const serverUrl = env.SERVER_URL || "https://api.pocketflow.app";
+      const serverUrl = env.SERVER_URL || "https://api.pocketflow.ai";
 
       console.log(`Testing connection to server: ${serverUrl}`);
 
