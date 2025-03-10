@@ -26,7 +26,7 @@ A TypeScript SDK for interacting with the PocketFlow API, enabling seamless inte
 Clone the github repo:
 
 ```bash
-git clone [https://github.com/The-Pocket-World/sdk.git](https://github.com/The-Pocket-World/Pocketflow-SDK.git)
+git clone https://github.com/The-Pocket-World/sdk.git
 ```
 
 Install dependencies:
