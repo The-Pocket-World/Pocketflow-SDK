@@ -112,7 +112,7 @@ POCKETFLOW_API_KEY=your_api_key_here
 POCKETFLOW_SERVER_URL=https://api.pocketflow.ai
 ```
 
-You can get the pocketflow api key from the [PocketFlow dashboard](https://platform.pocketflow.ai/settings/api).
+You can log into your account get the pocketflow api key from the [PocketFlow dashboard](https://platform.pocketflow.ai/settings/api).
 
 Now, you can run the quickstart example by running:
 
