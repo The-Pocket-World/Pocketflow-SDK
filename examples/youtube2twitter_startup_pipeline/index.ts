@@ -305,6 +305,25 @@ export interface YouTubeToTwitterPipelineResult {
 }
 
 /**
+ * Create a new socket connection
+ *
+ * @param authToken Authentication token for the PocketFlow API
+ * @param verbose Enable verbose logging
+ * @returns A promise that resolves with the socket connection
+ */
+async function createSocketConnection(
+  authToken: string,
+  verbose: boolean = false
+) {
+  const { connectSocket } = await import("../../src/socket/connect");
+  if (verbose) console.log("🔌 Creating new socket connection...");
+  return connectSocket(
+    process.env.POCKETFLOW_SERVER_URL || "api.pocketflow.ai",
+    { token: authToken }
+  );
+}
+
+/**
  * Run the YouTube to Twitter pipeline
  *
  * @param options Configuration options
@@ -339,104 +358,119 @@ export async function runYouTubeToTwitterPipeline(
   }
 
   try {
-    // Create a shared socket connection for all workflows
-    const { connectSocket } = await import("../../src/socket/connect");
-    const sharedSocket = await connectSocket(
-      process.env.POCKETFLOW_SERVER_URL || "api.pocketflow.ai",
-      { token: authToken }
-    );
+    // Step 1: Summarize the YouTube video
+    if (verbose) console.log("📝 Summarizing YouTube video...");
 
+    // Create a dedicated socket for YouTube workflow
+    const youtubeSocket = await createSocketConnection(authToken, verbose);
+    if (verbose)
+      console.log("🔌 Created dedicated socket for YouTube workflow");
+
+    let summaryResult;
     try {
-      // Step 1: Summarize the YouTube video
-      if (verbose) console.log("📝 Summarizing YouTube video...");
-      const summaryResult = await runYoutubeSummarizerWithFallback(
+      summaryResult = await runYoutubeSummarizerWithFallback(
         {
           videoUrl: options.videoUrl,
           summaryLength,
         },
         authToken,
-        sharedSocket // Pass the shared socket
+        youtubeSocket // Use dedicated YouTube socket
       );
-
-      console.log("SUMMARY RESULT RECEIVED:");
-      console.log(
-        JSON.stringify(
-          {
-            summaryExists: typeof summaryResult.summary === "string",
-            summaryLength:
-              typeof summaryResult.summary === "string"
-                ? summaryResult.summary.length
-                : 0,
-            keyPointsLength: Array.isArray(summaryResult.keyPoints)
-              ? summaryResult.keyPoints.length
-              : "not an array",
-            metadataExists: !!summaryResult.metadata,
-          },
-          null,
-          2
-        )
-      );
-
-      if (verbose) {
-        console.log(`✅ Video summarized successfully`);
-        console.log(
-          `📊 Summary length: ${summaryResult.summary.length} characters`
-        );
-        console.log(`📊 Key points: ${summaryResult.keyPoints.length}`);
-      }
-
-      // Step 2: Extract startup ideas from the summary using Anthropic API
-      if (verbose) console.log("💡 Extracting startup ideas from summary...");
-
-      // Add safety check for summary
-      if (!summaryResult.summary || summaryResult.summary.length === 0) {
-        console.log(
-          "⚠️ WARNING: No summary content available. Cannot extract startup ideas."
-        );
-        console.log("Summary result:", summaryResult);
-        throw new Error(
-          "Failed to extract summary from video. The summary is empty or undefined."
-        );
-      }
-
-      const startupIdeas = await extractStartupIdeas(
-        summaryResult.summary,
-        anthropicApiKey
-      );
-
-      console.log("STARTUP IDEAS EXTRACTION RESULT:");
-      console.log(`Number of ideas extracted: ${startupIdeas.length}`);
-      if (startupIdeas.length > 0) {
-        console.log(
-          "First idea preview:",
-          startupIdeas[0].substring(0, 100) + "..."
-        );
-      }
-
-      if (verbose) {
-        console.log(`✅ Extracted ${startupIdeas.length} startup ideas`);
-        startupIdeas.forEach((idea, index) => {
-          console.log(`  ${index + 1}. ${idea.substring(0, 80)}...`);
-        });
-      }
-
-      // Step 3: Search Twitter for each startup idea
-      if (verbose) console.log("🔍 Searching Twitter for related content...");
-
-      const startupIdeasWithTweets: StartupIdeaWithTweets[] = [];
-
-      for (const idea of startupIdeas) {
+    } finally {
+      // Clean up YouTube socket
+      if (youtubeSocket?.disconnect) {
         if (verbose)
-          console.log(
-            `\nSearching for tweets related to: ${idea.substring(0, 50)}...`
-          );
+          console.log("🔌 Disconnecting YouTube socket connection...");
+        youtubeSocket.disconnect();
+      }
+    }
 
+    console.log("SUMMARY RESULT RECEIVED:");
+    console.log(
+      JSON.stringify(
+        {
+          summaryExists: typeof summaryResult.summary === "string",
+          summaryLength:
+            typeof summaryResult.summary === "string"
+              ? summaryResult.summary.length
+              : 0,
+          keyPointsLength: Array.isArray(summaryResult.keyPoints)
+            ? summaryResult.keyPoints.length
+            : "not an array",
+          metadataExists: !!summaryResult.metadata,
+        },
+        null,
+        2
+      )
+    );
+
+    if (verbose) {
+      console.log(`✅ Video summarized successfully`);
+      console.log(
+        `📊 Summary length: ${summaryResult.summary.length} characters`
+      );
+      console.log(`📊 Key points: ${summaryResult.keyPoints.length}`);
+    }
+
+    // Step 2: Extract startup ideas from the summary using Anthropic API
+    if (verbose) console.log("💡 Extracting startup ideas from summary...");
+
+    // Add safety check for summary
+    if (!summaryResult.summary || summaryResult.summary.length === 0) {
+      console.log(
+        "⚠️ WARNING: No summary content available. Cannot extract startup ideas."
+      );
+      console.log("Summary result:", summaryResult);
+      throw new Error(
+        "Failed to extract summary from video. The summary is empty or undefined."
+      );
+    }
+
+    const startupIdeas = await extractStartupIdeas(
+      summaryResult.summary,
+      anthropicApiKey
+    );
+
+    console.log("STARTUP IDEAS EXTRACTION RESULT:");
+    console.log(`Number of ideas extracted: ${startupIdeas.length}`);
+    if (startupIdeas.length > 0) {
+      console.log(
+        "First idea preview:",
+        startupIdeas[0].substring(0, 100) + "..."
+      );
+    }
+
+    if (verbose) {
+      console.log(`✅ Extracted ${startupIdeas.length} startup ideas`);
+      startupIdeas.forEach((idea, index) => {
+        console.log(`  ${index + 1}. ${idea.substring(0, 80)}...`);
+      });
+    }
+
+    // Step 3: Search Twitter for each startup idea
+    if (verbose) console.log("🔍 Searching Twitter for related content...");
+
+    const startupIdeasWithTweets: StartupIdeaWithTweets[] = [];
+
+    for (const idea of startupIdeas) {
+      if (verbose)
+        console.log(
+          `\nSearching for tweets related to: ${idea.substring(0, 50)}...`
+        );
+
+      try {
+        // Set up query for Twitter search
+        const twitterQuery = idea.split(" ").slice(0, 5).join(" ");
+
+        // Create a dedicated socket for each Twitter search
+        const twitterSocket = await createSocketConnection(authToken, verbose);
+        if (verbose)
+          console.log("🔌 Created dedicated socket for Twitter workflow");
+
+        let twitterResult;
         try {
-          // Set up query for Twitter search
-          const twitterQuery = idea.split(" ").slice(0, 5).join(" ");
-
-          // Run the Twitter search workflow
-          const twitterResult = await runTwitterMonitoringWithFallback(
+          // Run the Twitter search workflow with dedicated socket
+          twitterResult = await runTwitterMonitoringWithFallback(
             {
               prompt: twitterQuery,
               project_description: "Startup idea from YouTube video",
@@ -445,77 +479,70 @@ export async function runYouTubeToTwitterPipeline(
               min_retweets: minRetweets,
             },
             authToken,
-            sharedSocket
+            twitterSocket
           );
-
-          // Add the idea with tweets to the result array
-          startupIdeasWithTweets.push({
-            idea,
-            tweets: twitterResult.tweets || [],
-          });
-
-          if (verbose) {
-            console.log(
-              `  ✅ Found ${twitterResult.tweets?.length || 0} tweets`
-            );
+        } finally {
+          // Clean up Twitter socket
+          if (twitterSocket?.disconnect) {
+            if (verbose)
+              console.log("🔌 Disconnecting Twitter socket connection...");
+            twitterSocket.disconnect();
           }
-        } catch (error) {
-          console.error(
-            `Error searching for tweets related to: ${idea}:`,
-            error
-          );
-          console.error("Continuing without this idea...");
         }
-      }
 
-      // Compile results
-      const result: YouTubeToTwitterPipelineResult = {
-        videoMetadata: summaryResult.metadata || {},
-        summary: summaryResult.summary || "",
-        keyPoints: summaryResult.keyPoints || [],
-        startupIdeas,
-        startupIdeasWithTweets,
-      };
+        // Add the idea with tweets to the result array
+        startupIdeasWithTweets.push({
+          idea,
+          tweets: twitterResult.tweets || [],
+        });
 
-      // For debugging
-      if (verbose) {
-        console.log("📊 Result summary:");
-        console.log(
-          `  Video: ${result.videoMetadata?.title || "Unknown title"}`
-        );
-        console.log(`  Summary: ${result.summary.substring(0, 100)}...`);
-        console.log(`  Key points: ${result.keyPoints.length}`);
-        console.log(`  Startup ideas: ${result.startupIdeas.length}`);
-        console.log(
-          `  Tweets found: ${result.startupIdeasWithTweets.reduce(
-            (acc, item) => acc + (item.tweets?.length || 0),
-            0
-          )}`
-        );
-      }
-
-      // Generate HTML report if requested
-      if (saveResults) {
-        if (verbose) console.log("📄 Generating HTML report...");
-        try {
-          const htmlContent = generateHtmlReport(result);
-          const outputPath = saveHtmlReport(htmlContent);
-          if (verbose) console.log(`📊 Report saved to: ${outputPath}`);
-        } catch (error) {
-          console.error("Error generating HTML report:", error);
-          console.error("Continuing without HTML report...");
+        if (verbose) {
+          console.log(`  ✅ Found ${twitterResult.tweets?.length || 0} tweets`);
         }
-      }
-
-      return result;
-    } finally {
-      // Clean up the shared socket connection after all workflows are complete
-      if (sharedSocket?.disconnect) {
-        if (verbose)
-          console.log("🔌 Disconnecting shared socket connection...");
-        sharedSocket.disconnect();
+      } catch (error) {
+        console.error(`Error searching for tweets related to: ${idea}:`, error);
+        console.error("Continuing without this idea...");
       }
     }
+
+    // Compile results
+    const result: YouTubeToTwitterPipelineResult = {
+      videoMetadata: summaryResult.metadata || {},
+      summary: summaryResult.summary || "",
+      keyPoints: summaryResult.keyPoints || [],
+      startupIdeas,
+      startupIdeasWithTweets,
+    };
+
+    // For debugging
+    if (verbose) {
+      console.log("📊 Result summary:");
+      console.log(`  Video: ${result.videoMetadata?.title || "Unknown title"}`);
+      console.log(`  Summary: ${result.summary.substring(0, 100)}...`);
+      console.log(`  Key points: ${result.keyPoints.length}`);
+      console.log(`  Startup ideas: ${result.startupIdeas.length}`);
+      console.log(
+        `  Tweets found: ${result.startupIdeasWithTweets.reduce(
+          (acc, item) => acc + (item.tweets?.length || 0),
+          0
+        )}`
+      );
+    }
+
+    // Generate HTML report if requested
+    if (saveResults) {
+      if (verbose) console.log("📄 Generating HTML report...");
+      try {
+        const htmlContent = generateHtmlReport(result);
+        const outputPath = saveHtmlReport(htmlContent);
+        if (verbose) console.log(`📊 Report saved to: ${outputPath}`);
+      } catch (error) {
+        console.error("Error generating HTML report:", error);
+        console.error("Continuing without HTML report...");
+      }
+    }
+
+    return result;
   } catch (error) {
     console.error(
       "❌ Error in YouTube to Twitter pipeline:",
